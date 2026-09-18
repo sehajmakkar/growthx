@@ -16,6 +16,7 @@ import { identify, readCachedManifest, writeCachedManifest } from "./storage.js"
 import { applyMutations, type ApplyResult, type Mutation } from "./apply.js";
 import { initCollector, record, flush } from "./collect.js";
 import { observe } from "./observe.js";
+import { captureSnapshot } from "./snapshot.js";
 import { deviceClassFor } from "@growthx/shared/runtime";
 
 declare const __GX_API__: string;
@@ -27,6 +28,9 @@ interface ManifestExperiment { id: string; path: string; split: Record<string, n
 interface Manifest { v: 1; siteId: string; generatedAt: number; conversion: { kind: string; value: string }; experiments: ManifestExperiment[] }
 
 interface GxState {
+  /** Exposed so the capture script can read the outline at several widths
+   *  through the exact code path a real visitor runs. */
+  snapshot?: () => ReturnType<typeof captureSnapshot>;
   version: string;
   siteId: string | null;
   visitorId?: string;
@@ -76,6 +80,7 @@ const state: GxState = {
   reason: null,
   manifestSource: "none",
 };
+state.snapshot = captureSnapshot;
 window.__growthx = state;
 
 const t0 = Date.now();

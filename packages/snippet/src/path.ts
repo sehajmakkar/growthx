@@ -97,6 +97,23 @@ function resolvesToOne(selector: string): boolean {
 }
 
 /**
+ * Does this selector say anything about *what* it targets?
+ *
+ * `div > span:nth-of-type(6)` resolves to exactly one element today, but only by
+ * accident — no other div happens to have six spans. It conveys nothing to a
+ * model, and it breaks the moment anyone adds a list item. A selector has to
+ * carry at least one id or human-chosen class before we accept it, even when a
+ * shorter positional one would technically resolve.
+ */
+function hasIdentity(selector: string): boolean {
+  return selector.indexOf("#") !== -1 || /\.[a-zA-Z]/.test(selector);
+}
+
+function acceptable(selector: string): boolean {
+  return hasIdentity(selector) && resolvesToOne(selector);
+}
+
+/**
  * Builds the shortest selector that resolves to exactly this element.
  * Returns null when no stable path can be found within four ancestors, which is
  * honest: a selector that matches several elements is worse than none, because
@@ -124,20 +141,20 @@ export function domPath(el: Element | null): string | null {
   const anonymous = !(el.id && isStableId(el.id)) && semanticClasses(el).length === 0;
 
   let path = segment(el);
-  if (!anonymous && resolvesToOne(path)) return path;
+  if (!anonymous && acceptable(path)) return path;
 
   let node: Element | null = el.parentElement;
   for (let depth = 0; depth < 4 && node && node.tagName !== "HTML" && node.tagName !== "BODY"; depth++) {
     path = `${segment(node)} > ${path}`;
-    if (resolvesToOne(path)) return path;
+    if (acceptable(path)) return path;
     // A descendant combinator is more tolerant of intermediate wrappers.
     const loose = path.replace(/ > /, " ");
-    if (resolvesToOne(loose)) return loose;
+    if (acceptable(loose)) return loose;
     node = node.parentElement;
   }
 
-  // Fall back to the bare segment only if nothing better was found: a selector
-  // that resolves is worth more than one that reads nicely.
+  // Last resort: a positional selector that at least resolves. Better than
+  // dropping the element entirely, but it is the worst case, not the target.
   if (resolvesToOne(path)) return path;
   const bare = segment(el);
   return resolvesToOne(bare) ? bare : null;

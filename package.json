@@ -16,7 +16,7 @@
     "deploy:infra": "pnpm build:snippet && pnpm build:site-a && pnpm secrets:push && pnpm --filter @growthx/infra run deploy && node scripts/upload-static.mjs && node scripts/outputs.mjs",
     "seed:experiment": "node scripts/seed-experiment.mjs",
     "query:events": "node scripts/query-events.mjs",
-    "dump:snapshot": "node scripts/not-yet.mjs dump:snapshot P5",
+    "dump:snapshot": "tsx scripts/dump-snapshot.mjs",
     "spike:selectors": "node scripts/not-yet.mjs spike:selectors P6",
     "swarm": "node scripts/not-yet.mjs swarm P7",
     "screenshot": "node scripts/not-yet.mjs screenshot P9",
@@ -28,12 +28,14 @@
     "cdk:diff": "pnpm --filter @growthx/infra run diff",
     "check:site-a": "node scripts/check-site-a.mjs",
     "check:flicker": "node scripts/check-flicker.mjs",
-    "check:ingestion": "node scripts/check-ingestion.mjs"
+    "check:ingestion": "node scripts/check-ingestion.mjs",
+    "capture:snapshot": "node scripts/capture-snapshot.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.2",
     "playwright": "^1.63.0",
     "postgres": "^3.4.9",
+    "tsx": "^4.23.13",
     "typescript": "^5.6.3"
   },
   "pnpm": {
