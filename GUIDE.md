@@ -351,6 +351,55 @@ if everything else is finished, which it will not be.
 
 ---
 
+## §E — Git and GitHub workflow
+
+`main` stays green. Every phase lands through a pull request that you merge.
+
+### The loop, per phase
+
+1. Claude branches from `main`: `phase/p01-aws-foundation`, `phase/p02-site-a`, …
+2. Claude implements the phase, commits, pushes the branch, and opens a PR whose
+   description is the phase's exit criteria plus how to verify it.
+3. **You verify** using that phase's §C block — against the branch, before merging.
+4. **You merge the PR on GitHub.** That is the gate: nothing reaches `main` that
+   you have not personally seen working.
+5. You say "P*n* passed, start P*n+1*". Claude pulls `main` and branches again.
+
+If verification fails, Claude pushes fixes to the same branch — we do not carry a
+broken phase forward, because every later phase assumes the earlier ones hold.
+
+### One-time: authenticate gh
+
+`gh` is installed (2.101.0). This step is interactive, so you must run it:
+
+```bash
+gh auth login
+```
+
+Choose: **GitHub.com** → **HTTPS** → **Yes** (authenticate Git with your GitHub
+credentials) → **Login with a web browser**. Copy the one-time code, paste it in
+the browser.
+
+**Verify:**
+
+```bash
+gh auth status
+```
+
+**You should see** `✓ Logged in to github.com account sehajmakkar`.
+
+Then tell Claude, and it will create the public `growthx` repo and push `main`.
+
+### What Claude will never do
+
+- Push directly to `main`.
+- Merge its own PR.
+- Force-push a branch you are reviewing.
+- Commit `.env`, or anything else in `.gitignore`. Every commit is secret-scanned
+  first; `.env` is ignored and was verified as such before the first commit.
+
+---
+
 ## §C — Per-phase verification
 
 ### P0 — Repo, toolchain, `GUIDE.md`  [status: ✅ passed Thu 18 Sept]
