@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P3 complete — snippet live, variants applying. Thu 18 Sept.
+**Last updated:** P4 complete — behaviour landing in Postgres. Thu 18 Sept.
 
 ### Phases
 
@@ -25,8 +25,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P1** — AWS foundation deployed | passed Thu 18 Sept |
 | ✅ | **P2** — Site A landing page | passed Thu 18 Sept |
 | ✅ | **P3** — Snippet: bucketing, mutations, anti-flicker | passed Thu 18 Sept |
-| ▶ | **P4** — Event capture and ingestion (1.5h) | next |
-| ⬜ | P5 — DOM snapshot (0.75h) | |
+| ✅ | **P4** — Event capture and ingestion | passed Thu 18 Sept |
+| ▶ | **P5** — DOM snapshot (0.75h) | next |
 | ⬜ | P6 — Selector grounding spike ⚠ GATE (1.25h) | unblocked — runs on Gemini |
 | ⬜ | P7 — Traffic swarm (1.75h) | |
 | ⬜ | P8–P16 — Friday: aggregation, dashboard, agent | |
@@ -36,13 +36,14 @@ ten times more at 2am on Saturday than it does now.
 **Next checkpoint:** Thu 22:00 — Site A live and instrumented, events flowing,
 snapshot captured, P6 gate passed, swarm producing traffic. (PLAN.md §1.4)
 
-**Time used so far:** P0–P3 ≈ 5h of the ~12h Thursday budget. On schedule.
+**Time used so far:** P0–P4 ≈ 6.5h of the ~12h Thursday budget. On schedule.
 
 ### Your next action
 
-**Verify P3** using its block in §C below. Run `pnpm check:flicker`, then open
-Site A with `?gx_force=v_cta_above_copy` at phone width and reload a few times
-watching for a blink. Then merge the PR and say **"start P4"**.
+**Verify P4** using its block in §C below. Run `pnpm check:ingestion`, then do
+the manual version: click around Site A, rage-click the pricing accordion,
+**close the tab**, and confirm with `pnpm query:events` that the events from just
+before you closed it arrived. Then merge the PR and say **"start P5"**.
 
 Setup from §B is complete and verified; nothing there is outstanding.
 
@@ -864,6 +865,116 @@ The hand-written challenger lifts the CTA above the copy, softens its wording,
 drops the hero art on mobile and hides the announcement bar. **The agent
 generates its own from data in P15** — this one exists only so P3 has something
 real to apply.
+
+---
+
+### P4 — Event capture and ingestion  [status: ✅ passed Thu 18 Sept]
+
+#### What this phase should have made true
+
+Real behaviour from a real browser lands in Postgres, labelled with selectors the
+agent will later be asked to target, and with coordinates that survive a change
+of screen size.
+
+#### Run this
+
+```bash
+cd /Users/sehaj/Developer/Github/growthx
+pnpm check:ingestion      # drives a real session end to end and asserts it landed
+pnpm query:events         # the last 3 sessions, event by event
+pnpm query:events --summary
+```
+
+Then do it yourself, which is the check that matters:
+
+```bash
+source .env.local && open "$GX_SITE_A_URL"
+```
+
+1. Click the CTA region, scroll to the bottom.
+2. **Rage-click the "See what's included" row in the middle pricing card** — the
+   unwired accordion. Hit it four or five times quickly.
+3. **Close the tab.** Do not navigate away gently; close it.
+4. Wait ten seconds, then run `pnpm query:events`.
+
+#### You should see
+
+Your whole session, in order, **including the events from just before you closed
+the tab**. That last part is the `sendBeacon` path and it is the one that fails
+silently — a plain `fetch` on unload loses exactly the events that matter most:
+the rage click, the back-exit, the scroll that never reached the CTA.
+
+A healthy session looks like this:
+
+```
+  0 pageview
+  1 exposure      {applied: 0, failed: 0}
+  2 click         div.tier-expand
+  3 click         div.tier-expand
+  4 click         div.tier-expand
+  5 rage_click    div.tier-expand   {clickCount: 3, withinMs: 92}
+  7 dead_click    div.tier-expand
+ 12 scroll        {bandsCrossed: [25,50,75,100], maxScrollFrac: 1}
+ 14 click         a.cta-primary.btn-solid
+ 15 element_view  div.tier.tier-1 > h3   {timeToFirstViewMs: 1, visibleMs: 1856}
+ 34 dwell         {ms: 2696, scope: "page"}
+```
+
+Then on the success page, a second pageview and a `conversion`.
+
+#### The two things worth staring at
+
+**1. Selectors must be semantic, never utility classes.** You should see
+`a.cta-primary.btn-solid` and `div.tier.tier-2 > p.tier-price`. You must **not**
+see anything like `div.mt-5.flex`. Utility classes describe how a thing looks;
+they change the moment anyone restyles the page, and a heatmap keyed on them
+would quietly rot. `check:ingestion` asserts this.
+
+This matters more than it looks: **P5's DOM snapshot uses the same path builder**,
+so the selectors the agent reads in a heatmap come from the same alphabet as the
+selectors it is asked to target. That shared alphabet is the reason the P6 gate
+can pass at all.
+
+**2. Coordinates are fractions, never pixels.** Every click carries three frames:
+
+```
+elem(0.4995, 0.4993)   ← fraction of the clicked element's own box — the primary signal
+page(0.2462, 0.2085)   ← fraction of the full document
+vp(0.2462, 0.5)        ← fraction of the viewport, for above/below-fold reasoning
+```
+
+A click at raw `(195, 420)` means nothing across screen sizes. "Half-way across
+the CTA" means the same thing on a phone and a 27-inch monitor. Getting this
+wrong would make every heatmap plausible-looking **and wrong**, which is worse
+than having no heatmap — so P11 re-checks it by projecting a known click across
+two viewports.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| No events at all | snippet missing, or `/collect` unreachable — check the browser console | code |
+| Events, but nothing after you closed the tab | the beacon path broke | code |
+| Selectors contain `.mt-5`, `.flex`, `.text-muted` | the utility filter in `path.ts` needs the new prefix | code |
+| `elem_frac` null on clicks | the click target had zero size | usually fine, e.g. clicking padding |
+| Duplicate-looking `element_view` rows | expected — they are emitted once per element at session end | neither |
+| `check:ingestion` reports missing types but `query:events` shows them | the test read the table mid-flight; it now waits for the count to settle | test, already fixed |
+
+#### Code bug or environment problem?
+
+- **`/collect` returns 202 with `origin not allowed`** → the site's `origins`
+  column does not include the URL you are browsing. Re-run `pnpm seed:experiment`.
+- **`/collect` returns 400 `invalid batch`** → the snippet and the zod schema
+  disagree. Code, tell me.
+- **Events land but `simulated` is true** → you are looking at traffic-swarm rows
+  from P7, not your own session. Filter by your session id.
+
+#### Inspect by hand
+
+```bash
+pnpm query:events --session <session_id>   # every event, in order
+pnpm db:studio                             # or browse the events table directly
+```
 
 ---
 

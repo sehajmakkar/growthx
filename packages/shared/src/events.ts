@@ -62,7 +62,13 @@ export const ConversionPayload = z.object({
   value: z.string().max(300),
 });
 
-/** One event as sent by the snippet. */
+/**
+ * One event as sent by the snippet.
+ *
+ * The spatial fields are promoted to the top level rather than buried in
+ * `payload` because they map to real columns and are what every aggregate in
+ * §4.2 groups by. `payload` holds only the type-specific remainder.
+ */
 export const IngestEvent = z.object({
   type: EventType,
   ts: z.number().int(),
@@ -70,7 +76,13 @@ export const IngestEvent = z.object({
   path: z.string().max(300),
   experimentId: z.string().max(80).nullable().default(null),
   variantId: z.string().max(80).nullable().default(null),
-  payload: z.unknown().optional(),
+  selector: z.string().max(300).nullable().optional(),
+  elemFrac: Frac.nullable().optional(),
+  pageFrac: Frac.optional(),
+  vpFrac: Frac.optional(),
+  scrollY: z.number().optional(),
+  docH: z.number().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
 });
 export type IngestEvent = z.infer<typeof IngestEvent>;
 

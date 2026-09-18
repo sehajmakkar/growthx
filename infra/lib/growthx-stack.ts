@@ -130,6 +130,25 @@ export class GrowthxStack extends Stack {
     });
     grantSecrets(manifest);
 
+    const collect = new NodejsFunction(this, "CollectFn", {
+      ...lambdaDefaults,
+      entry: path.join(repoRoot, "packages/api/src/handlers/collect.ts"),
+      handler: "handler",
+      memorySize: 512,
+      timeout: Duration.seconds(10),
+      logGroup: new logs.LogGroup(this, "CollectFnLogs", {
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
+    });
+    grantSecrets(collect);
+
+    api.addRoutes({
+      path: "/collect",
+      methods: [apigw.HttpMethod.POST, apigw.HttpMethod.OPTIONS],
+      integration: new integrations.HttpLambdaIntegration("CollectIntegration", collect),
+    });
+
     api.addRoutes({
       path: "/manifest",
       methods: [apigw.HttpMethod.GET],
