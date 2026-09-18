@@ -14,6 +14,9 @@
 import { bucketVariant, ANTIFLICKER_TIMEOUT_MS, ANTIFLICKER_TOTAL_MS, MANIFEST_MAX_AGE_S } from "@growthx/shared/runtime";
 import { identify, readCachedManifest, writeCachedManifest } from "./storage.js";
 import { applyMutations, type ApplyResult, type Mutation } from "./apply.js";
+import { initCollector, record, flush } from "./collect.js";
+import { observe } from "./observe.js";
+import { deviceClassFor } from "@growthx/shared/runtime";
 
 declare const __GX_API__: string;
 declare const __GX_CDN__: string;
@@ -137,10 +140,21 @@ function pickExperiment(m: Manifest, path: string): ManifestExperiment | null {
   return null;
 }
 
+let observing = false;
+let conversionConfig: { kind: string; value: string } = { kind: "url", value: "/signup/success" };
+
+function startObserving(): void {
+  if (observing) return;
+  observing = true;
+  observe({ experimentId: state.experimentId, variantId: state.variantId }, conversionConfig);
+}
+
 function run(m: Manifest, visitorId: string): void {
+  conversionConfig = m.conversion ?? conversionConfig;
   const experiment = pickExperiment(m, location.pathname);
   if (!experiment) {
     reveal("no-experiment");
+    whenDomReady(startObserving);
     return;
   }
 
@@ -151,7 +165,12 @@ function run(m: Manifest, visitorId: string): void {
 
   const variant = experiment.variants.filter((v) => v.id === variantId)[0];
   if (!variant || !variant.mutations.length) {
+    state.applied = true; // nothing to apply is still a valid assignment
     reveal(forced ? "forced-control" : "control");
+    whenDomReady(() => {
+      record("exposure", { experimentId: experiment.id, variantId, payload: { applied: 0, failed: 0 } });
+      startObserving();
+    });
     return;
   }
 
@@ -160,12 +179,28 @@ function run(m: Manifest, visitorId: string): void {
     // change lands before anything is visible, or it does not land at all.
     if (revealed) {
       state.suppressed = true;
+      record("custom", {
+        experimentId: experiment.id,
+        payload: { kind: "suppressed", reason: state.reason },
+      });
+      startObserving();
       return;
     }
     const result = applyMutations(variant.mutations);
     state.result = result;
     state.applied = true;
     reveal("applied");
+
+    // Exposure is recorded when the variant is actually on screen, not when it
+    // was merely assigned. A suppressed pageview (see below) never fires this,
+    // so it cannot be attributed to the challenger.
+    record("exposure", {
+      experimentId: experiment.id,
+      variantId,
+      payload: { applied: result.applied, failed: result.failed.length },
+    });
+
+    startObserving();
 
     // One retry for nodes that render late. Only unresolved selectors are
     // retried, so nothing already on screen is touched a second time.
@@ -206,6 +241,22 @@ function run(m: Manifest, visitorId: string): void {
   state.sessionId = id.sessionId;
   state.isReturning = id.isReturning;
 
+  initCollector({
+    siteId,
+    visitorId: id.visitorId,
+    sessionId: id.sessionId,
+    isReturning: id.isReturning,
+    device: deviceClassFor(window.innerWidth),
+    viewport: { w: window.innerWidth, h: window.innerHeight },
+    referrer: document.referrer || "",
+    // The traffic swarm sets this so every simulated number can be badged in
+    // the UI. A real visitor can never set it: it comes from a flag the swarm
+    // injects, not from anything in the page.
+    simulated: !!(window as any).__gxSimulated,
+    persona: (window as any).__gxPersona ?? null,
+  });
+  record("pageview", {});
+
   // A repeat visit inside the cache window needs no network at all, which is
   // what makes the second pageview reliably flicker-free on a slow connection.
   const cached = readCachedManifest<Manifest>(MANIFEST_MAX_AGE_S * 1000);
@@ -230,5 +281,10 @@ function run(m: Manifest, visitorId: string): void {
       writeCachedManifest(m);
       run(m, id.visitorId);
     })
-    .catch(() => reveal("manifest-error"));
+    .catch(() => {
+      reveal("manifest-error");
+      // Behaviour is still worth recording when we could not fetch a manifest:
+      // the visitor is simply unassigned, not invisible.
+      whenDomReady(startObserving);
+    });
 })();
