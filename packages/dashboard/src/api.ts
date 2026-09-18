@@ -33,7 +33,16 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
   return res.json() as Promise<T>;
 }
 
+export interface Point { x: number; y: number; weight: number; type: string; selector: string }
+export interface Summary {
+  sessions: number; pageviews: number; clicks: number;
+  avg_seconds: number | null; conversion_pct: number | null;
+}
+
 export const api = {
+  points: (segment: string, mode: "clicks" | "attention", path = "/") =>
+    get<{ mode: string; points: Point[] }>("/api/points", { segment, mode, path }),
+  summary: (segment: string, path = "/") => get<Summary>("/api/summary", { segment, path }),
   heatmap: (segment: string, path = "/") => get<Heatmap>("/api/heatmap", { segment, path }),
   funnel: (segment: string, path = "/") =>
     get<{ steps: { step: string; sessions: number }[] }>("/api/funnel", { segment, path }),

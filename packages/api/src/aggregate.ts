@@ -275,3 +275,70 @@ export async function computeAll(db: Db, siteId: string, path: string) {
 
   return written;
 }
+
+/**
+ * Raw points for the overlay.
+ *
+ * The per-element table answers "which things did people act on"; this answers
+ * "where on the page did it happen", which is the question a heatmap image is
+ * actually good at. Coordinates come back as page fractions so the overlay can
+ * be drawn over a screenshot of any width without re-measuring anything —
+ * that is the whole reason events store fractions rather than pixels (§4.5).
+ */
+export async function heatmapPoints(
+  db: Db, siteId: string, path: string, segmentKey: string,
+  mode: "clicks" | "attention" = "clicks"
+) {
+  const seg = segmentFilter(segmentKey);
+  const types = mode === "clicks"
+    ? sql`e.type in ('click','rage_click','dead_click')`
+    : sql`e.type = 'element_view'`;
+
+  const res = await db.execute<Record<string, unknown>>(sql`
+    select
+      (e.page_frac->>'x')::float8 as x,
+      (e.page_frac->>'y')::float8 as y,
+      case when e.type = 'rage_click' then 3 when e.type = 'dead_click' then 2 else 1 end as weight,
+      e.type,
+      e.selector
+    from events e
+    join (select s.id from sessions s where s.site_id = ${siteId} and ${seg}) g on g.id = e.session_id
+    where e.site_id = ${siteId} and e.path = ${path}
+      and ${types} and e.page_frac is not null
+    limit 4000
+  `);
+
+  // Attention is drawn from element boxes rather than points: an element seen
+  // for four seconds is not a dot, it is a region.
+  const boxes = mode === "attention"
+    ? await db.execute<Record<string, unknown>>(sql`
+        select sn.elements from snapshots sn
+        where sn.site_id = ${siteId} and sn.path = ${path} and sn.is_current = true
+        limit 1`)
+    : null;
+
+  return {
+    mode,
+    points: (res.rows ?? []) as unknown as { x: number; y: number; weight: number; type: string; selector: string }[],
+    elements: (boxes?.rows?.[0] as { elements?: unknown })?.elements ?? null,
+  };
+}
+
+/** Header figures for the heatmap screen. */
+export async function pageSummary(db: Db, siteId: string, path: string, segmentKey: string) {
+  const seg = segmentFilter(segmentKey);
+  const res = await db.execute<Record<string, unknown>>(sql`
+    with g as (select s.* from sessions s where s.site_id = ${siteId} and ${seg})
+    select
+      (select count(*)::int from g)                                                as sessions,
+      (select count(*)::int from events e join g on g.id = e.session_id
+        where e.type = 'pageview' and e.path = ${path})                            as pageviews,
+      (select count(*)::int from events e join g on g.id = e.session_id
+        where e.type in ('click','rage_click','dead_click') and e.path = ${path})  as clicks,
+      (select round(avg(extract(epoch from (g.ended_at - g.started_at)))::numeric, 1)::float8
+        from g)                                                                    as avg_seconds,
+      (select round((count(*) filter (where g.converted)::numeric * 100 /
+        nullif(count(*),0)), 2)::float8 from g)                                    as conversion_pct
+  `);
+  return (res.rows ?? [])[0] ?? {};
+}
