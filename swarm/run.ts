@@ -152,12 +152,21 @@ async function runSession(browser: Browser, index: number): Promise<Outcome> {
     // How far this person gets, and how long they linger.
     const reach = scrollReach(persona, reading, rand);
     const dwellMs = between(persona.dwellRange[0], persona.dwellRange[1]) * 1000;
-    const steps = Math.max(1, Math.round(reach * 6));
 
+    // Nobody scrolls the instant a page loads. Without this pause every
+    // below-the-fold element recorded a time-to-first-view of ~20ms, which made
+    // the metric useless: "how long before they saw it" is one of the three
+    // clauses the agent needs to write a credible opportunity, and a page that
+    // reports 0.02s for an element below the fold is reporting a measurement
+    // artefact rather than behaviour.
+    await sleep(between(600, 2200));
+
+    const steps = Math.max(3, Math.round(reach * 10));
     for (let i = 1; i <= steps; i++) {
       await page.evaluate((y: number) => window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior }),
         (reading.docH * reach * i) / steps);
-      await sleep(dwellMs / steps / 2);
+      // Reading pauses dominate scrolling time for anyone who is not skimming.
+      await sleep((dwellMs / steps) * between(0.5, 1.1));
     }
 
     // Researchers and considerers poke at the pricing accordion that does

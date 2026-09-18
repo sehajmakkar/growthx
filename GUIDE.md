@@ -1387,6 +1387,27 @@ Two subtleties worth knowing, because both were bugs first:
 | `round(double precision, integer) does not exist` | a `percentile_cont` result needs `::numeric` before two-arg `round` | code |
 | Aggregation takes more than a second | a rollup has been moved out of SQL into TypeScript | code |
 
+#### A measurement that was an artefact
+
+The first aggregation reported `median_time_to_first_view` of **0.02s** for the
+CTA on mobile — an element that sits 109px *below* the mobile fold and therefore
+cannot be seen without scrolling. Twenty milliseconds is not a person scrolling;
+it was the swarm scrolling the instant the page loaded.
+
+That number matters: "how long before they saw it" is one of the three clauses
+the agent needs to write a credible opportunity. Fixed at the source — visitors
+now pause before scrolling and read as they go — and it became the clearest
+signal in the dataset:
+
+```
+desktop          CTA time-to-first-view  0.01s   (already on screen)
+mobile           CTA time-to-first-view  1.18s   (must scroll to reach it)
+mobile, bounced  CTA time-to-first-view  1.31s
+```
+
+The rule this illustrates: **a metric that looks impossibly good is usually
+measuring your instrument rather than the world.**
+
 #### The bug this phase surfaced
 
 The first aggregation showed `device=mobile|outcome=bounced` with **143 sessions
