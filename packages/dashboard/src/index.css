@@ -1,0 +1,48 @@
+@import "./tokens.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background: var(--base);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, th {
+    font-family: "Archivo", system-ui, sans-serif;
+    letter-spacing: -0.015em;
+  }
+  /* Every number, id, selector and p-value. Mono numerals are the cheapest
+     thing that makes a tool look like an instrument rather than a webpage. */
+  .num, td.num, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-border bg-surface shadow-card;
+  }
+  .label {
+    @apply font-display text-[0.6875rem] font-semibold uppercase tracking-[0.09em] text-muted;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 rounded border border-border bg-surface px-3 py-1.5
+           text-sm font-medium text-ink transition-colors;
+    transition-duration: 140ms;
+  }
+  .btn:hover { background: var(--accent-soft); }
+  .btn-primary {
+    @apply btn border-transparent text-surface;
+    background: var(--accent);
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[0.625rem]
+           font-medium uppercase tracking-[0.08em];
+  }
+}

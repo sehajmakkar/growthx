@@ -1,5 +1,5 @@
 import { FRICTION_THRESHOLDS, SCROLL_BANDS, SNAPSHOT_SELECTOR } from "@growthx/shared/runtime";
-import { domPath, meaningfulTarget } from "./path.js";
+import { domPath, meaningfulTarget, semanticClasses } from "./path.js";
 import { record, flush } from "./collect.js";
 
 /**
@@ -201,8 +201,25 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
       { threshold: 0.5 }
     );
     try {
-      const nodes = document.querySelectorAll(SNAPSHOT_SELECTOR);
-      for (let i = 0; i < nodes.length && i < 200; i++) io.observe(nodes[i]!);
+      // The tag list alone is not enough. A <div class="tier-expand"> matches
+      // none of it, so the accordion that generates the page's rage and dead
+      // clicks was never observed for visibility — the heatmap reported "0% saw
+      // it" for an element visitors had demonstrably clicked. Anything a human
+      // named, or anything that looks clickable, is observed too, which also
+      // keeps this set aligned with what the DOM snapshot captures.
+      const seen = new Set<Element>();
+      const add = (el: Element) => {
+        if (seen.size >= 250 || seen.has(el)) return;
+        seen.add(el);
+        io.observe(el);
+      };
+      document.querySelectorAll(SNAPSHOT_SELECTOR).forEach(add);
+      document.querySelectorAll("div, span, li, figure").forEach((el) => {
+        if (semanticClasses(el).length > 0) add(el);
+        else {
+          try { if (getComputedStyle(el).cursor === "pointer") add(el); } catch { /* detached */ }
+        }
+      });
     } catch { /* ignore */ }
   }
 

@@ -13,7 +13,7 @@
     "build:snippet": "pnpm --filter @growthx/snippet build",
     "dev:site-a": "pnpm --filter @growthx/site-a dev",
     "build:site-a": "pnpm --filter @growthx/site-a build && node scripts/inject-snippet.mjs",
-    "deploy:infra": "pnpm build:snippet && pnpm build:site-a && pnpm secrets:push && pnpm --filter @growthx/infra run deploy && node scripts/upload-static.mjs && node scripts/outputs.mjs",
+    "deploy:infra": "pnpm build:snippet && pnpm build:site-a && pnpm build:dashboard && pnpm secrets:push && pnpm --filter @growthx/infra run deploy && node scripts/upload-static.mjs && node scripts/outputs.mjs",
     "seed:experiment": "node scripts/seed-experiment.mjs",
     "query:events": "node scripts/query-events.mjs",
     "dump:snapshot": "tsx scripts/dump-snapshot.mjs",
@@ -31,7 +31,9 @@
     "check:ingestion": "node scripts/check-ingestion.mjs",
     "capture:snapshot": "node scripts/capture-snapshot.mjs",
     "aggregate": "tsx scripts/aggregate.mjs",
-    "digests": "tsx scripts/digests.mjs"
+    "digests": "tsx scripts/digests.mjs",
+    "build:dashboard": "pnpm --filter @growthx/dashboard build",
+    "dev:dashboard": "pnpm --filter @growthx/dashboard dev"
   },
   "devDependencies": {
     "esbuild": "^0.24.2",
