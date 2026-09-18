@@ -174,6 +174,32 @@ export class GrowthxStack extends Stack {
       integration: new integrations.HttpLambdaIntegration("SnapshotIntegration", snapshot),
     });
 
+    const dashboardApi = new NodejsFunction(this, "DashboardFn", {
+      ...lambdaDefaults,
+      entry: path.join(repoRoot, "packages/api/src/handlers/dashboard.ts"),
+      handler: "handler",
+      memorySize: 1024,
+      timeout: Duration.seconds(30),
+      logGroup: new logs.LogGroup(this, "DashboardFnLogs", {
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
+    });
+    grantSecrets(dashboardApi);
+
+    for (const route of ["/api/heatmap", "/api/funnel"]) {
+      api.addRoutes({
+        path: route,
+        methods: [apigw.HttpMethod.GET],
+        integration: new integrations.HttpLambdaIntegration(`Dash${route.replace(/\W/g, "")}`, dashboardApi),
+      });
+    }
+    api.addRoutes({
+      path: "/api/aggregate",
+      methods: [apigw.HttpMethod.POST],
+      integration: new integrations.HttpLambdaIntegration("DashAggregate", dashboardApi),
+    });
+
     api.addRoutes({
       path: "/manifest",
       methods: [apigw.HttpMethod.GET],

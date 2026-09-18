@@ -190,11 +190,16 @@ async function runSession(browser: Browser, index: number): Promise<Outcome> {
       await sleep(between(200, 900));
     }
 
-    // A human closing a tab gives the beacon time to leave; ctx.close() does
-    // not. Without this, most sessions delivered no events at all — 300 runs
-    // produced 68 sessions of data. Flush explicitly and wait for the network.
-    await page.evaluate(() => (window as any).__growthx?.flush?.()).catch(() => {});
-    await sleep(250);
+    // End the session the way pagehide would, and wait for it.
+    //
+    // Two failures led here. A context closed without navigating never fires
+    // pagehide, so `element_view` was emitted only by visitors who navigated —
+    // which is to say, only by those who converted, leaving the bounced-mobile
+    // segment empty. Navigating to about:blank fixes that but races the beacon,
+    // and delivery fell to 57%. Asking the snippet to end the session and
+    // awaiting the flush is deterministic and does neither.
+    await page.evaluate(() => (window as any).__growthx?.end?.()).catch(() => {});
+    await sleep(200);
 
     await ctx.close();
     ctx = null;

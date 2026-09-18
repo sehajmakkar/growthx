@@ -33,6 +33,8 @@ interface GxState {
   snapshot?: () => ReturnType<typeof captureSnapshot>;
   /** Flushes queued events and resolves when they are away. */
   flush?: () => Promise<void>;
+  /** Ends the session as pagehide would: emits visibility, dwell, then flushes. */
+  end?: () => Promise<void>;
   version: string;
   siteId: string | null;
   visitorId?: string;
@@ -154,7 +156,13 @@ let conversionConfig: { kind: string; value: string } = { kind: "url", value: "/
 function startObserving(): void {
   if (observing) return;
   observing = true;
-  observe({ experimentId: state.experimentId, variantId: state.variantId }, conversionConfig);
+  const onEnd = observe({ experimentId: state.experimentId, variantId: state.variantId }, conversionConfig);
+  state.end = () => {
+    // Record the end of the session without beaconing, so the flush below is
+    // the one that actually delivers and can be awaited.
+    try { onEnd(false); } catch { /* never throw at end of session */ }
+    return flushAsync();
+  };
 }
 
 function run(m: Manifest, visitorId: string): void {
