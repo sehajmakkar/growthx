@@ -380,13 +380,31 @@ Choose: **GitHub.com** → **HTTPS** → **Yes** (authenticate Git with your Git
 credentials) → **Login with a web browser**. Copy the one-time code, paste it in
 the browser.
 
+> ⚠️ **Choose "Login with a web browser", not "Paste an authentication token".**
+> A **fine-grained** personal access token is scoped to repositories you have
+> already selected and to explicit permissions, so it cannot create a new
+> repository — `gh repo create` fails with
+> `Resource not accessible by personal access token (createRepository)` — and it
+> usually cannot push to a repo it was not granted. The browser flow issues an
+> OAuth token with full `repo` scope, which is what this workflow needs.
+>
+> If you already authenticated with a token, fix it with:
+>
+> ```bash
+> gh auth logout --hostname github.com
+> gh auth login          # then pick "Login with a web browser"
+> ```
+
 **Verify:**
 
 ```bash
 gh auth status
+curl -s -I -H "Authorization: token $(gh auth token)" https://api.github.com/user | grep -i x-oauth-scopes
 ```
 
-**You should see** `✓ Logged in to github.com account sehajmakkar`.
+**You should see** `✓ Logged in to github.com account sehajmakkar`, and an
+`x-oauth-scopes:` line that includes `repo`. **If that second command prints
+nothing, you are still on a fine-grained token** and repo creation will fail.
 
 Then tell Claude, and it will create the public `growthx` repo and push `main`.
 
