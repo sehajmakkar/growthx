@@ -79,7 +79,7 @@ function isInteractive(el: Element | null): boolean {
   return false;
 }
 
-export function observe(ctx: Ctx, conversion: { kind: string; value: string }): void {
+export function observe(ctx: Ctx, conversion: { kind: string; value: string }): () => void {
   const ids = () => ({ experimentId: ctx.experimentId, variantId: ctx.variantId });
   let converted = false;
 
@@ -250,7 +250,12 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
   // than summing them.
   let emitCount = 0;
 
-  function onEnd() {
+  /**
+   * `useBeacon` is false only when called programmatically. Beaconing here
+   * would empty the queue before an awaited flush could see it, which silently
+   * reintroduces the very race the caller is trying to avoid.
+   */
+  function onEnd(useBeacon = true) {
     sampleScroll();
     const elapsed = Date.now() - t0;
     emitVisibility(emitCount++);
@@ -266,13 +271,13 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
     if (sameOrigin && !converted && !onConversionPage && elapsed < FRICTION_THRESHOLDS.backExitMs && emitCount === 1) {
       record("back_exit", { ...ids(), payload: { ms: elapsed } });
     }
-    flush(true);
+    if (useBeacon) flush(true);
   }
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") onEnd();
+    if (document.visibilityState === "hidden") onEnd(true);
   });
-  window.addEventListener("pagehide", onEnd);
+  window.addEventListener("pagehide", () => onEnd(true));
 
   // ── conversion by URL ───────────────────────────────────────────────────
   if (conversion.kind === "url" && location.pathname.indexOf(conversion.value) !== -1) {
@@ -280,4 +285,10 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
     record("conversion", { ...ids(), payload: { kind: "url", value: conversion.value } });
     flush(true);
   }
+
+  // Returned so the session can be ended deterministically. A real visitor
+  // triggers this through pagehide; automation needs to be able to ask for it,
+  // because a closed browser context fires nothing and a beacon racing a
+  // navigation is not a reliable way to deliver the last events of a session.
+  return (useBeacon?: boolean) => onEnd(useBeacon ?? true);
 }

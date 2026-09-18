@@ -29,7 +29,8 @@
     "check:site-a": "node scripts/check-site-a.mjs",
     "check:flicker": "node scripts/check-flicker.mjs",
     "check:ingestion": "node scripts/check-ingestion.mjs",
-    "capture:snapshot": "node scripts/capture-snapshot.mjs"
+    "capture:snapshot": "node scripts/capture-snapshot.mjs",
+    "aggregate": "tsx scripts/aggregate.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.2",

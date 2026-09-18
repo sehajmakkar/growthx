@@ -152,12 +152,21 @@ async function runSession(browser: Browser, index: number): Promise<Outcome> {
     // How far this person gets, and how long they linger.
     const reach = scrollReach(persona, reading, rand);
     const dwellMs = between(persona.dwellRange[0], persona.dwellRange[1]) * 1000;
-    const steps = Math.max(1, Math.round(reach * 6));
 
+    // Nobody scrolls the instant a page loads. Without this pause every
+    // below-the-fold element recorded a time-to-first-view of ~20ms, which made
+    // the metric useless: "how long before they saw it" is one of the three
+    // clauses the agent needs to write a credible opportunity, and a page that
+    // reports 0.02s for an element below the fold is reporting a measurement
+    // artefact rather than behaviour.
+    await sleep(between(600, 2200));
+
+    const steps = Math.max(3, Math.round(reach * 10));
     for (let i = 1; i <= steps; i++) {
       await page.evaluate((y: number) => window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior }),
         (reading.docH * reach * i) / steps);
-      await sleep(dwellMs / steps / 2);
+      // Reading pauses dominate scrolling time for anyone who is not skimming.
+      await sleep((dwellMs / steps) * between(0.5, 1.1));
     }
 
     // Researchers and considerers poke at the pricing accordion that does
@@ -190,11 +199,16 @@ async function runSession(browser: Browser, index: number): Promise<Outcome> {
       await sleep(between(200, 900));
     }
 
-    // A human closing a tab gives the beacon time to leave; ctx.close() does
-    // not. Without this, most sessions delivered no events at all — 300 runs
-    // produced 68 sessions of data. Flush explicitly and wait for the network.
-    await page.evaluate(() => (window as any).__growthx?.flush?.()).catch(() => {});
-    await sleep(250);
+    // End the session the way pagehide would, and wait for it.
+    //
+    // Two failures led here. A context closed without navigating never fires
+    // pagehide, so `element_view` was emitted only by visitors who navigated —
+    // which is to say, only by those who converted, leaving the bounced-mobile
+    // segment empty. Navigating to about:blank fixes that but races the beacon,
+    // and delivery fell to 57%. Asking the snippet to end the session and
+    // awaiting the flush is deterministic and does neither.
+    await page.evaluate(() => (window as any).__growthx?.end?.()).catch(() => {});
+    await sleep(200);
 
     await ctx.close();
     ctx = null;

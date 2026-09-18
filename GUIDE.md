@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P7 complete — Thursday's checkpoint met in full. Thu 18 Sept.
+**Last updated:** P8 complete — heatmap data computed. Fri 19 Sept.
 
 ### Phases
 
@@ -29,8 +29,9 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P5** — DOM snapshot | passed Thu 18 Sept |
 | ✅ | **P6** — Selector grounding gate ⚠ | **PASSED** Thu 18 Sept |
 | ✅ | **P7** — Traffic swarm | passed Thu 18 Sept |
-| ▶ | **P8** — Aggregation engine (1.25h) | next — Friday |
-| ⬜ | P9–P16 — Friday: dashboard, heatmaps, agent | |
+| ✅ | **P8** — Aggregation engine | passed Fri 19 Sept |
+| ▶ | **P9** — Screenshots + session digests (1h) | next |
+| ⬜ | P10–P16 — Friday: dashboard, heatmaps, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
 
@@ -1310,6 +1311,120 @@ the site *without* closing the tab and confirm events arrive anyway.
    **deployed** site through the **real** snippet into the **real** endpoint.
    What is simulated is the person, and only the person.
 3. The dashboard badges simulated numbers (P10), and the video says so out loud.
+
+---
+
+### P8 — Aggregation engine  [status: ✅ passed Fri 19 Sept]
+
+#### What this phase should have made true
+
+Seven thousand raw events become the two artefacts everything downstream
+consumes: the numbers a human reads as a heatmap, and the same numbers as
+structure for the agent.
+
+#### Run this
+
+```bash
+pnpm aggregate                    # recompute all nine segments and print a summary
+source .env.local
+curl -s "$GX_API_BASE/api/heatmap?path=/&segment=device=mobile|outcome=bounced" | python3 -m json.tool | head -40
+```
+
+#### You should see
+
+Nine segments recomputed in well under a second, and — the point of the whole
+phase — **mobile behaving measurably worse than desktop**:
+
+```
+device=mobile     scroll: 25%→89%  50%→50%  75%→21%  100%→3%
+device=desktop    scroll: 25%→100% 50%→100% 75%→89%  100%→70%
+```
+
+Half of mobile visitors never reach the halfway point; nearly all desktop
+visitors do. That is the flaw, in numbers, without anyone asserting it.
+
+You should also see the friction Site A was built to produce:
+
+```
+dead_click ×85 on div.tier-expand
+rage_click ×18 on div.tier-expand
+```
+
+#### The number that is easy to misread
+
+`click_rate_pct` is **clicks ÷ views**, never clicks ÷ sessions. An element
+nobody scrolled to has no click rate rather than a zero one. Every place this
+figure appears — the dashboard, the JSON handed to the agent — says which
+denominator it uses, because the two differ by a factor of three or more on a
+long page and quietly swapping them would make every conclusion wrong.
+
+#### Where the numbers come from
+
+Every rollup is a SQL statement, not a loop. That is the reason the datastore is
+Postgres (PLAN §3.2): nine segments over seven thousand events is one `GROUP BY`
+each. If you ever find aggregation being assembled in TypeScript, it is in the
+wrong place and it will be slow and wrong.
+
+Two subtleties worth knowing, because both were bugs first:
+
+- **`element_view` is a cumulative snapshot, not an increment.** The snippet
+  re-emits totals each time the page is hidden (P4), so summing would
+  multiply-count anyone who switched tabs. Aggregation takes the *last* snapshot
+  per `(session, selector)`.
+- **`bounced` is strict**: no conversion *and* the visitor either left within ten
+  seconds or never reached halfway. A looser "did not convert" would make
+  converted-vs-bounced a tidy binary split, but it would label a careful reader
+  who simply was not ready to buy as a bounce. The remainder are neither — they
+  browsed and left.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| A segment reports 0 viewed elements | visibility never emitted for those sessions — see below | code |
+| `click_rate_pct` 0 everywhere | clicks and views disagree on selector spelling; the path builder has drifted | code |
+| Mobile and desktop scroll identically | sessions rollup is wrong, or the swarm is not layout-reactive | code |
+| `round(double precision, integer) does not exist` | a `percentile_cont` result needs `::numeric` before two-arg `round` | code |
+| Aggregation takes more than a second | a rollup has been moved out of SQL into TypeScript | code |
+
+#### A measurement that was an artefact
+
+The first aggregation reported `median_time_to_first_view` of **0.02s** for the
+CTA on mobile — an element that sits 109px *below* the mobile fold and therefore
+cannot be seen without scrolling. Twenty milliseconds is not a person scrolling;
+it was the swarm scrolling the instant the page loaded.
+
+That number matters: "how long before they saw it" is one of the three clauses
+the agent needs to write a credible opportunity. Fixed at the source — visitors
+now pause before scrolling and read as they go — and it became the clearest
+signal in the dataset:
+
+```
+desktop          CTA time-to-first-view  0.01s   (already on screen)
+mobile           CTA time-to-first-view  1.18s   (must scroll to reach it)
+mobile, bounced  CTA time-to-first-view  1.31s
+```
+
+The rule this illustrates: **a metric that looks impossibly good is usually
+measuring your instrument rather than the world.**
+
+#### The bug this phase surfaced
+
+The first aggregation showed `device=mobile|outcome=bounced` with **143 sessions
+and zero viewed elements** — obviously wrong, since those visitors plainly saw
+the header.
+
+`element_view` is emitted by the snippet's `pagehide` handler. A browser context
+closed *without navigating* never fires it. Only converting visitors navigate, so
+**`viewed_pct` was being measured exclusively for people who converted** — the
+precise opposite of the segment the product exists to diagnose. The swarm now
+navigates to `about:blank` before closing, which is what a real visitor leaving
+actually does.
+
+This is the third time a measurement has been right for the sessions that
+happened to be tested and wrong for the ones that mattered. The pattern is worth
+naming: **verify the segment you care about, not the one that is easiest to
+produce.**
 
 ---
 
