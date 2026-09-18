@@ -9,3 +9,4 @@ export * from "./mutations.js";
 export * from "./events.js";
 export * from "./manifest.js";
 export * from "./snapshot.js";
+export * from "./validate.js";

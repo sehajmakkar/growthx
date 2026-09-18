@@ -31,3 +31,4 @@ sites/*/public/styles.css
 .env.local
 infra/cdk-outputs.json
 packages/dashboard/dist/
+artifacts/spike/
