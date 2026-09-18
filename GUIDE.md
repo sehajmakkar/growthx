@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P10 complete — dashboard live. Fri 19 Sept.
+**Last updated:** P11 complete — heatmap overlay live. Fri 19 Sept.
 
 ### Phases
 
@@ -32,7 +32,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P8** — Aggregation engine | passed Fri 19 Sept |
 | ✅ | **P9** — Screenshots + session digests | passed Fri 19 Sept |
 | ✅ | **P10** — Dashboard scaffold + design system | passed Fri 19 Sept |
-| ▶ | **P11** — ★ Heatmap overlay (2h) | next — the hero screen |
+| ✅ | **P11** — ★ Heatmap overlay | passed Fri 19 Sept |
+| ▶ | **P12** — Agent skeleton (1.5h) | next |
 | ⬜ | P10–P16 — Friday: dashboard, heatmaps, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
@@ -1589,6 +1590,65 @@ try to use it** — and nothing happens.
 This mattered beyond tidiness: P11 draws a marker per element, and a row claiming
 nobody saw something eleven people clicked would render as a visible
 contradiction on the screen judges look at longest.
+
+---
+
+### P11 — ★ Heatmap overlay  [status: ✅ passed Fri 19 Sept]
+
+#### What this phase should have made true
+
+The hero screen: real click density drawn over the real page, with the segment
+controls a CRO tool is expected to have.
+
+#### Run this
+
+```bash
+source .env.local && open "$GX_DASHBOARD_URL/heatmaps"
+```
+
+Switch Mobile ↔ Desktop, Clicks ↔ Scroll ↔ Attention, and Outcome between
+Converted and Bounced.
+
+#### You should see
+
+The pane opens **on the densest part of the page**, not the top, and the two
+hottest spots are the **£11 price** and the **"See what's included" accordion
+that does nothing**. That second one is the point: you can see people clicking a
+control that is not wired up.
+
+The page underneath is desaturated so the overlay is the only strong colour.
+
+#### How the overlay is drawn
+
+Two passes. The first draws every point as a greyscale radial gradient, so
+overlapping points accumulate density in the alpha channel. The second replaces
+each pixel's colour by looking its alpha up in a ramp. Drawing coloured blobs
+directly would stack as discs; this blends them into a field.
+
+Rage clicks carry 3× weight and dead clicks 2×, so friction reads hotter than
+ordinary interaction.
+
+Points are **page fractions** (§4.5), so the same data draws correctly over the
+390×4685 mobile capture and the 1440×2960 desktop one with no re-measurement.
+That is the entire reason events were stored as fractions back in P4.
+
+#### Two problems the reference screenshots exposed
+
+1. **The overlay was invisible on load.** Site A is 4685px tall on mobile, so a
+   scroll pane opens on the header — where nothing ever happens. It looked
+   broken. There is now a density rail showing activity by depth, and the view
+   opens on the densest region.
+2. **Only 22 click points.** The personas clicked the CTA and the accordion and
+   nothing else, so the map was three hot spots on a dead page — a property of
+   the simulation, not the site. Visitors now also click headings, logos and nav
+   links on the way past, which is what people do. **201 points.**
+
+#### What is deliberately not here
+
+The reference has a **Move** map and Location / Browser / OS filters. We never
+recorded mousemove, and we do not collect geo or user-agent breakdowns — adding
+them now means new event types and re-running everything downstream. Four filters
+that work beat seven where three are decorative, particularly if a judge clicks one.
 
 ---
 

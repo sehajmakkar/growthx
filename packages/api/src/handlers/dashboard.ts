@@ -1,7 +1,7 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { getDb } from "@growthx/db";
 import { segmentKey } from "@growthx/shared/runtime";
-import { getHeatmap, funnel, computeAll } from "../aggregate.js";
+import { getHeatmap, funnel, computeAll, heatmapPoints, pageSummary } from "../aggregate.js";
 import { getSessionDigest } from "../digests.js";
 import { requireSecret } from "../secrets.js";
 import { json, badRequest, serverError } from "../http.js";
@@ -30,6 +30,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (route.endsWith("/heatmap")) {
       return json(200, await getHeatmap(db, siteId, path, segment));
+    }
+    if (route.endsWith("/points")) {
+      const mode = (q.mode === "attention" ? "attention" : "clicks") as "clicks" | "attention";
+      return json(200, await heatmapPoints(db, siteId, path, segment, mode));
+    }
+    if (route.endsWith("/summary")) {
+      return json(200, await pageSummary(db, siteId, path, segment));
     }
     if (route.endsWith("/digests")) {
       return json(200, { page: path, clusters: await getSessionDigest(db, siteId, path) });

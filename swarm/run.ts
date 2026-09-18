@@ -169,6 +169,26 @@ async function runSession(browser: Browser, index: number): Promise<Outcome> {
       await sleep((dwellMs / steps) * between(0.5, 1.1));
     }
 
+    // Incidental clicks. Real visitors do not only touch the call to action:
+    // they click headings, logos, nav links and whitespace on the way past.
+    // Without this the heatmap is three hot spots on an otherwise dead page,
+    // which is a property of the simulation rather than of the site.
+    const incidental = Math.round(reach * 4 * (0.4 + rand()));
+    const targets = [".brand", ".site-nav a", "h1.hero-headline", ".hero-footnote",
+                     ".logo-band span", ".tier-price", "figure.testimonial", ".feature h3"];
+    for (let i = 0; i < incidental; i++) {
+      const sel = targets[Math.floor(rand() * targets.length)]!;
+      const loc = page.locator(sel).first();
+      if (!(await loc.count())) continue;
+      const visible = await loc.evaluate((el: Element) => {
+        const r = el.getBoundingClientRect();
+        return r.top + window.scrollY < (window.scrollY + window.innerHeight) * 1.05;
+      }).catch(() => false);
+      if (!visible) continue;
+      await loc.click({ timeout: 1500, trial: false }).catch(() => {});
+      await sleep(between(150, 600));
+    }
+
     // Researchers and considerers poke at the pricing accordion that does
     // nothing — the friction the agent is meant to discover.
     if (rand() < persona.pokesPricing) {
