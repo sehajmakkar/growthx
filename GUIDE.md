@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P4 complete — behaviour landing in Postgres. Thu 18 Sept.
+**Last updated:** P5 complete — page outline captured. Thu 18 Sept.
 
 ### Phases
 
@@ -26,8 +26,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P2** — Site A landing page | passed Thu 18 Sept |
 | ✅ | **P3** — Snippet: bucketing, mutations, anti-flicker | passed Thu 18 Sept |
 | ✅ | **P4** — Event capture and ingestion | passed Thu 18 Sept |
-| ▶ | **P5** — DOM snapshot (0.75h) | next |
-| ⬜ | P6 — Selector grounding spike ⚠ GATE (1.25h) | unblocked — runs on Gemini |
+| ✅ | **P5** — DOM snapshot | passed Thu 18 Sept |
+| ▶ | **P6** — Selector grounding spike ⚠ GATE (1.25h) | **next — the gate** |
 | ⬜ | P7 — Traffic swarm (1.75h) | |
 | ⬜ | P8–P16 — Friday: aggregation, dashboard, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
@@ -36,14 +36,16 @@ ten times more at 2am on Saturday than it does now.
 **Next checkpoint:** Thu 22:00 — Site A live and instrumented, events flowing,
 snapshot captured, P6 gate passed, swarm producing traffic. (PLAN.md §1.4)
 
-**Time used so far:** P0–P4 ≈ 6.5h of the ~12h Thursday budget. On schedule.
+**Time used so far:** P0–P5 ≈ 7.5h of the ~12h Thursday budget. On schedule.
 
 ### Your next action
 
-**Verify P4** using its block in §C below. Run `pnpm check:ingestion`, then do
-the manual version: click around Site A, rage-click the pricing accordion,
-**close the tab**, and confirm with `pnpm query:events` that the events from just
-before you closed it arrived. Then merge the PR and say **"start P5"**.
+**Verify P5** using its block in §C below. The important part is not the script —
+it is reading `pnpm dump:snapshot` yourself and asking whether *you* could write a
+correct selector for the hero CTA from that text alone. If you would be guessing,
+so will the model, and P6 will fail. Say so now rather than tomorrow.
+
+Then merge the PR and say **"start P6"** — the gate.
 
 Setup from §B is complete and verified; nothing there is outstanding.
 
@@ -995,6 +997,101 @@ site yourself rather than only run the script. All three are now asserted in
 ```bash
 pnpm query:events --session <session_id>   # every event, in order
 pnpm db:studio                             # or browse the events table directly
+```
+
+---
+
+### P5 — DOM snapshot  [status: ✅ passed Thu 18 Sept]
+
+#### What this phase should have made true
+
+The page's structure is stored in the exact form the variant generator will read,
+keyed by selectors from the **same builder** event capture uses.
+
+#### Run this
+
+```bash
+pnpm capture:snapshot     # captures at 390px and 1440px, merges, stores
+pnpm dump:snapshot        # prints exactly what the model will see
+```
+
+#### You should see
+
+`capture:snapshot` reporting both widths, then a line that is the whole point of
+Site A:
+
+```
+.cta-primary → mobile:BELOW desktop:above
+```
+
+That single fact — above the fold on a desktop, below it on a phone — is the
+problem the agent has to find in P8, and it is **only** visible because the
+capture runs at two widths. Guessing the mobile fold from a desktop layout would
+be wrong, because the layout reflows.
+
+#### Read the dump as if you were the model — this is the real check
+
+```bash
+pnpm dump:snapshot | head -40
+```
+
+Each line is one element:
+
+```
+SELECTOR | tag | interactive? | "visible text" | font | y=position | mobile fold | desktop fold
+
+a.cta-primary.btn-solid | a | interactive | "Start free trial" | 18px/500 | y=12% | mobile:BELOW-FOLD | desktop:above-fold
+```
+
+**Now answer this honestly: from that text alone, without looking at the page,
+could you write a correct CSS selector for the hero call to action?**
+
+If yes, a Flash-class model probably can too, and the P6 gate has a chance. If
+you find yourself guessing, say so — the outline is under-specified and I should
+enrich it *before* we spend the gate's budget tomorrow morning. This is the
+cheapest possible moment to catch that.
+
+One thing that surprised me, worth knowing before you read it: a section with a
+stable `id` is pathed by that id, so `section#customers.social-proof` appears as
+`#customers` and the words "social proof" vanish. The renderer now appends
+`named:.social-proof` for exactly this case — the class is still the page's own
+vocabulary and the agent should have it, even though it targets by the selector.
+
+Things worth checking in the dump:
+- Is `.cta-primary` there, with its real text?
+- Is `.hero-subcopy` there, and does its `y=` position sit above the CTA's?
+- Is `.pricing-table` above `.social-proof`? (the latter shows as `#customers … named:.social-proof`)
+- Is `.tier-2 .tier-expand` present? That is the friction element.
+- Are the selectors the same *shape* as the ones in `pnpm query:events`? They must
+  be — same builder, same alphabet.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| Fewer than ~25 elements | the selector list or area threshold is too strict | code |
+| `.cta-primary` missing | `domPath()` could not find a unique selector for it | code — this would fail P6 outright |
+| Both fold columns identical | the capture ran at one width, or the merge dropped the mobile pass | code |
+| `unchanged (hash …) — nothing to do` | correct: the page has not changed since the last capture | neither |
+| `capture was mutated (variant … applied N changes)` | the capture browser got bucketed into a live experiment; it now forces the control arm and refuses rather than storing a mutated baseline | code, and it is guarding you |
+| Selectors here differ in shape from `query:events` | the two builders have diverged — **stop, this breaks P6** | code |
+| `waitForFunction` timeout on `__growthx.snapshot` | the deployed snippet is older than this code; re-run `pnpm deploy:infra` | environment |
+
+#### Why capture runs through the browser, not a parser
+
+The script calls the snippet's own `captureSnapshot()` via `window.__growthx`
+rather than parsing the HTML server-side. That is deliberate: a parser would need
+its own notion of what a selector looks like, and the moment it drifted from the
+snippet's path builder, the agent would be reading heatmaps in one alphabet and
+writing mutations in another. Every mutation would silently no-op and the
+product would appear to work while doing nothing. Sharing one function makes that
+failure impossible rather than unlikely.
+
+#### Inspect by hand
+
+```bash
+pnpm dump:snapshot | grep -E 'cta-primary|hero-subcopy|pricing-table|tier-expand'
+pnpm dump:snapshot | wc -l
 ```
 
 ---

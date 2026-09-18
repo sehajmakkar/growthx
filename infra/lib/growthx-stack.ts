@@ -149,6 +149,25 @@ export class GrowthxStack extends Stack {
       integration: new integrations.HttpLambdaIntegration("CollectIntegration", collect),
     });
 
+    const snapshot = new NodejsFunction(this, "SnapshotFn", {
+      ...lambdaDefaults,
+      entry: path.join(repoRoot, "packages/api/src/handlers/snapshot.ts"),
+      handler: "handler",
+      memorySize: 512,
+      timeout: Duration.seconds(15),
+      logGroup: new logs.LogGroup(this, "SnapshotFnLogs", {
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
+    });
+    grantSecrets(snapshot);
+
+    api.addRoutes({
+      path: "/snapshot",
+      methods: [apigw.HttpMethod.POST, apigw.HttpMethod.OPTIONS],
+      integration: new integrations.HttpLambdaIntegration("SnapshotIntegration", snapshot),
+    });
+
     api.addRoutes({
       path: "/manifest",
       methods: [apigw.HttpMethod.GET],
