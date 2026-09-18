@@ -15,15 +15,15 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P0 complete; **full setup verified end to end**; platform re-planned after the organisers' Bedrock clarification. Thu 18 Sept.
+**Last updated:** P1 complete — AWS foundation deployed. Thu 18 Sept.
 
 ### Phases
 
 | | Phase | Status |
 |---|---|---|
 | ✅ | **P0** — Repo, toolchain, `GUIDE.md` | passed Thu 18 Sept |
-| ▶ | **P1** — AWS foundation deployed | **blocked on you: §B1–§B4 below** |
-| ⬜ | P2 — Site A landing page (1.5h) | |
+| ✅ | **P1** — AWS foundation deployed | passed Thu 18 Sept |
+| ▶ | **P2** — Site A landing page (1.5h) | next |
 | ⬜ | P3 — Snippet: bucketing, mutations, anti-flicker (1.75h) | |
 | ⬜ | P4 — Event capture and ingestion (1.5h) | |
 | ⬜ | P5 — DOM snapshot (0.75h) | |
@@ -36,11 +36,14 @@ ten times more at 2am on Saturday than it does now.
 **Next checkpoint:** Thu 22:00 — Site A live and instrumented, events flowing,
 snapshot captured, P6 gate passed, swarm producing traffic. (PLAN.md §1.4)
 
-**Time used so far:** P0 ≈ 0.5h of the ~12h Thursday budget.
+**Time used so far:** P0 + P1 ≈ 1.5h of the ~12h Thursday budget. On schedule.
 
 ### Your next action
 
-**Setup is complete and verified.** Nothing is outstanding.
+**Verify P1** using its block in §C below — the one check that matters is that
+`/health` reports `"db": "ok"`. Then merge the PR and say **"start P2"**.
+
+Setup from §B is complete and verified; nothing there is outstanding.
 
 | Step | Verified |
 |---|---|
@@ -66,15 +69,14 @@ Two notes worth keeping in mind:
 
 ### Live URLs
 
-_Nothing deployed yet. P1 writes the real URLs here automatically via
-`scripts/outputs.ts`, so this table is never stale._
+_Written automatically by `scripts/outputs.mjs` on every deploy._
 
 | What | URL |
 |---|---|
-| Site A (the "customer" page) | — |
-| Dashboard (Site B) | — |
-| API base | — |
-| CDN (`g.js`) | — |
+| Site A (the "customer" page) | https://d2wz20j6mz6oyt.cloudfront.net |
+| Dashboard (Site B) | https://d1dxlipl3y71ai.cloudfront.net |
+| API base | https://sr53qdjzxb.execute-api.us-east-1.amazonaws.com |
+| CDN (`g.js`) | https://d1wo6i4tf1wdqb.cloudfront.net/g.js |
 
 ### Known broken / on a fallback path
 
@@ -82,7 +84,8 @@ _Nothing deployed yet. P1 writes the real URLs here automatically via
 |---|---|---|
 | **Bedrock model access** | ❌ Denied — and now **closed by decision** (§B2) | None. Organisers confirmed Bedrock is not mandatory; only deployment on AWS is. Gemini is the primary provider. |
 | **Gemini Pro** | ❌ Zero free-tier daily quota | None — the plan assumes Flash everywhere (§B5). |
-| **Datastore** | 🔄 Changed from DynamoDB to Postgres/Neon | Needs §B9 before P1. No code written against Dynamo, so nothing is wasted. |
+| **Datastore** | ✅ Postgres/Neon, 13 tables live | — |
+| **Neon free tier idles** | Project suspends after inactivity | The first request after a quiet spell wakes it and may take a second or two. Not a fault; call it twice. |
 
 **Rate-limit note:** Gemini free tier is ~10 requests/minute. Agent runs will
 pause between steps. That is expected, not a hang. (PLAN.md §3.1)
@@ -539,6 +542,117 @@ cat packages/snippet/dist/g.js
 
 That last file is worth ten seconds of your time: it is the entire payload every
 visitor of every customer site downloads, and it should stay small enough to read.
+
+### P1 — AWS foundation  [status: ✅ passed Thu 18 Sept]
+
+#### What this phase should have made true
+
+Three separate AWS origins are live, the API is deployed, and a single request
+proves the whole chain: API Gateway → Lambda → SSM secret → Neon Postgres.
+
+#### Run this
+
+```bash
+cd /Users/sehaj/Developer/Github/growthx
+pnpm check:db
+curl -s "$(grep GX_API_BASE .env.local | cut -d= -f2)/health" | python3 -m json.tool
+```
+
+Then open the three URLs from **§A Live URLs** in a browser.
+
+#### You should see
+
+- `pnpm check:db` → `✓ connected` and **`✓ 13 tables: aggregates, approvals,
+  digests, events, experiments, learnings, opportunities, reports, runs,
+  sessions, sites, snapshots, variants`**.
+- The health call → JSON containing **`"db": "ok"`**, `"tables": 13`, a
+  `"postgres"` version string, and a `latencyMs` (expect 300–900ms on a cold
+  start, under 150ms warm).
+
+  **`"db": "ok"` is the single most important string in this phase.** It proves
+  four things at once: CDK deployed, API Gateway routed to Lambda, the Lambda
+  read its encrypted secret from SSM, and it reached Neon over HTTPS with no VPC.
+- **Site A** → the bare P0 placeholder page. The real Corrick page is P2.
+- **Dashboard** → a placeholder saying the dashboard is built in P10. Expected.
+- **CDN** → opening `<CDN>/g.js` downloads or displays the snippet source.
+
+#### Check the CORS headers — this one matters later
+
+```bash
+source .env.local
+
+# g.js — note the -H Origin. Without it you will NOT see the CORS header.
+curl -sI -H "Origin: https://example.com" "$GX_CDN_URL/g.js" \
+  | grep -iE 'access-control-allow-origin|cache-control'
+
+# the API preflight the snippet performs before POST /collect in P4
+curl -s -o /dev/null -D - -X OPTIONS \
+  -H "Origin: https://example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type" \
+  "$GX_API_BASE/health" | grep -iE 'HTTP/|access-control'
+```
+
+**You should see** `access-control-allow-origin: *` and `cache-control:
+public,max-age=60` for `g.js`, and `HTTP/2 204` plus
+`access-control-allow-methods: GET,OPTIONS,POST` for the preflight.
+
+> ⚠️ **`curl -sI` on its own will show no CORS header, and that is correct.**
+> CloudFront only emits `access-control-allow-origin` when the request actually
+> is a CORS request — that is, when it carries an `Origin` header. Checking
+> without `-H "Origin: …"` looks like a failure and is not one. This cost time
+> once already; do not re-diagnose it.
+>
+> Separately, `curl -I` sends **HEAD**, and the API's `/health` route is
+> registered for GET only, so `curl -I "$GX_API_BASE/health"` returns 404. Use
+> `curl -s -o /dev/null -D -` as above to see headers on a GET.
+
+The 60s TTL on `g.js` is what makes the P18 kill switch take effect in under a
+minute, so do not raise it.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| `"db": "error"` with `password authentication failed` | SSM has a stale `DATABASE_URL` | environment → re-run `pnpm secrets:push` |
+| `"db": "error"` with `Secret DATABASE_URL is not available` | secrets were never pushed, or the Lambda lacks SSM permission | run `pnpm secrets:push`; if it persists, code |
+| Health returns 500 with `database unreachable` | Neon project is suspended (free tier idles) — the first call wakes it | environment, self-healing: call it twice |
+| `curl` returns `{"message":"Not Found"}` | wrong URL, or you dropped `/health` | environment |
+| CloudFront returns 403 for a file you know exists | the upload ran but the invalidation has not landed yet | wait ~60s, or re-run `pnpm deploy:infra` |
+| `cdk deploy` fails with `SSM parameter /cdk-bootstrap/... not found` | §B4 bootstrap was skipped, or run in another region | environment |
+
+#### Code bug or environment problem?
+
+- **`"db": "ok"` but a page 404s** → static upload/invalidation, not the API. Re-run `pnpm deploy:infra`.
+- **Anything mentioning `ExpiredToken` or `InvalidClientTokenId`** → AWS credentials, environment.
+- **`ERR_PNPM_INVALID_DEPLOY_TARGET`** → `pnpm deploy` is a *reserved pnpm command*; the script must say `pnpm --filter … run deploy`. Already fixed; flagged here because the error message never mentions the real cause.
+- **A TypeScript or bundling error during deploy** → code, tell Claude.
+
+#### Inspect by hand
+
+```bash
+# every table, with column counts
+pnpm db:studio          # opens Drizzle Studio in the browser
+
+# what the Lambda actually reads (decrypted — treat the output as secret)
+aws ssm get-parameter --name /growthx/DATABASE_URL --with-decryption \
+  --region us-east-1 --profile growthx --query 'Parameter.Type' --output text
+# → SecureString
+
+# the deployed stack's outputs
+cat infra/cdk-outputs.json | python3 -m json.tool
+```
+
+#### Tearing it all down (only if you need to)
+
+```bash
+pnpm --filter @growthx/infra run destroy
+```
+
+Removes every AWS resource in the stack. It does **not** touch Neon — the tables
+and data survive, and `pnpm deploy:infra` rebuilds the AWS side in ~5 minutes.
+
+---
 
 ---
 
