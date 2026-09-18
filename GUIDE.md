@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P1 complete — AWS foundation deployed. Thu 18 Sept.
+**Last updated:** P2 complete — Corrick landing page live. Thu 18 Sept.
 
 ### Phases
 
@@ -23,8 +23,8 @@ ten times more at 2am on Saturday than it does now.
 |---|---|---|
 | ✅ | **P0** — Repo, toolchain, `GUIDE.md` | passed Thu 18 Sept |
 | ✅ | **P1** — AWS foundation deployed | passed Thu 18 Sept |
-| ▶ | **P2** — Site A landing page (1.5h) | next |
-| ⬜ | P3 — Snippet: bucketing, mutations, anti-flicker (1.75h) | |
+| ✅ | **P2** — Site A landing page | passed Thu 18 Sept |
+| ▶ | **P3** — Snippet: bucketing, mutations, anti-flicker (1.75h) | next |
 | ⬜ | P4 — Event capture and ingestion (1.5h) | |
 | ⬜ | P5 — DOM snapshot (0.75h) | |
 | ⬜ | P6 — Selector grounding spike ⚠ GATE (1.25h) | unblocked — runs on Gemini |
@@ -36,12 +36,14 @@ ten times more at 2am on Saturday than it does now.
 **Next checkpoint:** Thu 22:00 — Site A live and instrumented, events flowing,
 snapshot captured, P6 gate passed, swarm producing traffic. (PLAN.md §1.4)
 
-**Time used so far:** P0 + P1 ≈ 1.5h of the ~12h Thursday budget. On schedule.
+**Time used so far:** P0–P2 ≈ 3h of the ~12h Thursday budget. On schedule.
 
 ### Your next action
 
-**Verify P1** using its block in §C below — the one check that matters is that
-`/health` reports `"db": "ok"`. Then merge the PR and say **"start P2"**.
+**Verify P2** using its block in §C below. Run `node scripts/check-site-a.mjs`,
+then look at Site A yourself at 390px and 1440px — the script measures the
+flaws, but only you can judge whether the page looks like a real company's.
+Then merge the PR and say **"start P3"**.
 
 Setup from §B is complete and verified; nothing there is outstanding.
 
@@ -651,6 +653,99 @@ pnpm --filter @growthx/infra run destroy
 
 Removes every AWS resource in the stack. It does **not** touch Neon — the tables
 and data survive, and `pnpm deploy:infra` rebuilds the AWS side in ~5 minutes.
+
+---
+
+### P2 — Site A: the Corrick landing page  [status: ✅ passed Thu 18 Sept]
+
+#### What this phase should have made true
+
+A plausible, aesthetically competent SaaS marketing page exists on its own
+domain, and it is **deliberately conversion-flawed in a way the agent can
+actually diagnose** — flawed in hierarchy and placement, never in taste.
+
+#### Run this
+
+```bash
+cd /Users/sehaj/Developer/Github/growthx
+node scripts/check-site-a.mjs                       # measures the flaws locally
+source .env.local && node scripts/check-site-a.mjs "$GX_SITE_A_URL"   # …and live
+```
+
+Then open **Site A** from §A on a phone-width window (390px) and at 1440px.
+
+#### You should see
+
+All checks green, with these measurements:
+
+| Flaw | Assertion | Measured |
+|---|---|---|
+| 1. CTA below the fold on mobile | `.cta-primary` top > 844px | **953px — 109px below** |
+| 1b. Copy pushes it down | `.hero-subcopy` above the CTA | 280px of copy |
+| 3. Pricing before social proof | `.pricing-table` above `.social-proof` | 2080px vs 3233px |
+| 4. Hero art eats the viewport | `.hero-figure` ≥30% of first screen | **30%** |
+| 5. Fake-interactive element | `.tier-2 .tier-expand` is a `<div>`, `cursor:pointer`, no handler | ✓ |
+
+Plus **selector hygiene**: every agent-facing hook (`.cta-primary`,
+`.hero-subcopy`, `.pricing-table`, `.social-proof`, `.tier-2`) resolves to
+**exactly one** element. This matters more than it looks: the P6 validator
+rejects any mutation whose selector matches zero or multiple elements, so a
+duplicate class here would silently break variant generation in P15.
+
+Screenshots land in `artifacts/` — `site-a-390.png`, `site-a-1440.png`.
+
+#### Judge it with your own eyes — this is the part a script cannot check
+
+Two questions, and both answers matter:
+
+1. **At 1440px: does this look like a real company's page, or like a demo?**
+   It is on screen in the first 15 seconds of the video. If it reads as a demo,
+   say so and I will rework it — that is cheap now and impossible on Saturday.
+2. **At 390px: would a CRO consultant have obvious notes?** You should have to
+   scroll past a large illustration and five lines of copy before any call to
+   action appears. That is the problem the agent is supposed to find.
+
+The flaw must live in **hierarchy and placement, not in taste**. If the page
+looks *ugly* rather than *badly prioritised*, the premise breaks: judges will
+read it as a strawman built to be beaten.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| `.cta-primary → 0 matches` | markup changed and a hook was dropped | code |
+| CTA measures *above* the fold | copy or hero art got shorter; the flaw evaporated | code — tell me, this breaks P8 |
+| `headline font resolves to …` not Fraunces | the woff2 files did not deploy | code |
+| Fonts render but flash unstyled first | `font-display: swap` doing its job — expected, not a fault | neither |
+| Live URL shows the old placeholder page | CloudFront has not finished invalidating | environment — wait ~60s |
+
+#### Code bug or environment problem?
+
+- **Local passes, deployed fails** → upload or CloudFront invalidation, not the
+  page. Re-run `pnpm deploy:infra`.
+- **`browserType.launch: Executable doesn't exist`** → Playwright browsers are
+  missing; re-run `pnpm dlx playwright install chromium` (§B6).
+- **Any assertion about px positions failing** → code. The flaws are measured,
+  not eyeballed, precisely so this is unambiguous.
+
+#### Inspect by hand
+
+```bash
+# the agent-facing hooks, as they appear in the markup
+grep -oE 'class="[^"]*(cta-primary|hero-subcopy|pricing-table|social-proof|tier-2)[^"]*"' \
+  sites/site-a/public/index.html
+
+# what is deliberately protected from the agent (Cedar enforces this in P17,
+# and the mutation denylist enforces it in code)
+grep -c 'data-gx-deny' sites/site-a/public/index.html   # → 3, the price figures
+```
+
+#### A note on what is deliberately *not* here
+
+There is no `data-gx-id` attribute on anything. Stamping stable ids on every
+element is the **escape route** for the P6 selector gate, not the starting point
+— using it now would make the gate pass trivially and tell us nothing about
+whether the approach works on a real page. If P6 fails, we add them then.
 
 ---
 

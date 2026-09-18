@@ -3,21 +3,257 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Corrick — expense controls for agencies</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <title>Corrick — expense controls for agencies that bill by the hour</title>
+    <meta
+      name="description"
+      content="Corrick reconciles every receipt against the right client, matter and billing code, so finance teams stop chasing screenshots and partners stop writing off hours."
+    />
+    <link rel="preload" href="/fonts/fraunces-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/karla-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- GROWTHX_SNIPPET -->
   </head>
-  <body class="font-sans">
-    <main class="mx-auto max-w-measure px-6 py-24">
-      <p class="font-display text-3xl text-ink">Corrick</p>
-      <p class="mt-4 text-muted">
-        P0 placeholder. The real landing page — with its five designed
-        conversion flaws — is built in P2.
-      </p>
-      <a
-        class="cta-primary mt-8 inline-block rounded bg-terracotta px-5 py-3 text-paper"
-        href="/signup/success.html"
-        >Start free trial</a
-      >
+
+  <body class="font-sans antialiased">
+    <!-- Announcement bar. The agent is allowed to hide this (see mutation
+         examples in PLAN.md §4.4) — it is pure noise above the fold. -->
+    <div class="secondary-banner bg-sage text-paper">
+      <div class="mx-auto flex max-w-6xl items-center justify-center gap-2 px-6 py-2.5 text-sm">
+        <span>New — Corrick now syncs with Harvest and Toggl</span>
+        <a href="#integrations" class="underline decoration-paper/40 underline-offset-4 hover:decoration-paper">Read more</a>
+      </div>
+    </div>
+
+    <header class="site-header rule border-t-0 border-b">
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
+        <a href="/" class="brand flex items-center gap-2.5" aria-label="Corrick home">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+            <rect x="0.75" y="0.75" width="20.5" height="20.5" rx="5" stroke="#B04A22" stroke-width="1.5" />
+            <path d="M15 7.2A5 5 0 1 0 15 14.8" stroke="#1B1A17" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          <span class="font-display text-xl font-semibold tracking-tight">Corrick</span>
+        </a>
+
+        <nav class="site-nav hidden items-center gap-7 text-sm text-muted md:flex">
+          <a href="#how" class="hover:text-ink">How it works</a>
+          <a href="#integrations" class="hover:text-ink">Integrations</a>
+          <a href="#pricing" class="hover:text-ink">Pricing</a>
+          <a href="#customers" class="hover:text-ink">Customers</a>
+        </nav>
+
+        <div class="flex items-center gap-3">
+          <a href="/login" class="hidden text-sm text-muted hover:text-ink sm:inline">Sign in</a>
+          <a href="/signup/success.html" class="cta-header btn-quiet !px-4 !py-2 text-sm">Start free trial</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- ── Hero ──────────────────────────────────────────────────────────
+           Flaw 1: the CTA sits below five lines of supporting copy.
+           Flaw 2: the headline is a feature statement, not an outcome.
+           Flaw 4: on mobile the illustration comes first and eats the viewport.
+           None of this is a planted bug — it is how a competent-but-unfocused
+           team ships a hero. PLAN.md §5.2. -->
+      <section class="hero mx-auto max-w-6xl px-6 pb-16 pt-10 md:pb-24 md:pt-16">
+        <div class="grid items-center gap-10 md:grid-cols-2 md:gap-14">
+          <figure class="hero-figure md:order-2">
+            <img
+              src="/hero.svg"
+              alt="The Corrick reconciliation view, showing card transactions matched to client matters"
+              width="640"
+              height="470"
+              fetchpriority="high"
+              decoding="async"
+              class="w-full rounded border border-hairline"
+            />
+          </figure>
+
+          <div class="hero-copy md:order-1">
+            <p class="eyebrow">Expense controls for professional services</p>
+            <h1 class="hero-headline mt-4 font-display text-[2.1rem] font-semibold leading-[1.12] tracking-[-0.015em] md:text-5xl">
+              Automated receipt matching for agency finance teams
+            </h1>
+            <p class="hero-subcopy mt-5 max-w-measure text-[1.0625rem] leading-[1.65] text-muted">
+              Corrick connects to your corporate card programme, your accounting
+              ledger and your project tracker, then reconciles every receipt
+              against the right client, the right matter and the right billing
+              code. Finance stops chasing screenshots in Slack at month end, and
+              partners stop writing off hours they have already worked because
+              nobody could evidence the spend against them.
+            </p>
+            <div class="hero-actions mt-7 flex flex-wrap items-center gap-3">
+              <a href="/signup/success.html" class="cta-primary btn-solid">Start free trial</a>
+              <a href="#how" class="btn-quiet">See how it works</a>
+            </div>
+            <p class="hero-footnote mt-4 text-sm text-muted">
+              14-day trial · No card required · SOC 2 Type II
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── How it works ─────────────────────────────────────────────────── -->
+      <section id="how" class="how rule">
+        <div class="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <h2 class="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+            Three steps, then it runs itself
+          </h2>
+          <div class="mt-10 grid gap-8 md:grid-cols-3 md:gap-10">
+            <div class="feature feature-1">
+              <p class="font-display text-2xl text-terracotta">01</p>
+              <h3 class="mt-3 font-display text-xl font-semibold">Connect the card programme</h3>
+              <p class="mt-2 text-[0.975rem] leading-relaxed text-muted">
+                Amex, Brex, Pleo and Revolut Business sync transactions as they
+                settle. No CSV exports, no manual imports.
+              </p>
+            </div>
+            <div class="feature feature-2">
+              <p class="font-display text-2xl text-terracotta">02</p>
+              <h3 class="mt-3 font-display text-xl font-semibold">Match to matters</h3>
+              <p class="mt-2 text-[0.975rem] leading-relaxed text-muted">
+                Receipts are read, categorised and attached to the client and
+                billing code your project tracker already knows about.
+              </p>
+            </div>
+            <div class="feature feature-3">
+              <p class="font-display text-2xl text-terracotta">03</p>
+              <h3 class="mt-3 font-display text-xl font-semibold">Close the month</h3>
+              <p class="mt-2 text-[0.975rem] leading-relaxed text-muted">
+                Exceptions surface in one queue. Everything else posts straight
+                to Xero, QuickBooks or NetSuite.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Pricing ───────────────────────────────────────────────────────
+           Flaw 3: pricing lands before any social proof, so a first-time
+           visitor meets the price before they have any reason to trust it.
+           Flaw 5: .tier-2 carries an accordion trigger that was never wired up —
+           it looks interactive, it is not, and it is what generates the dead
+           clicks and rage clicks the agent will find in P8.
+           Price figures carry data-gx-deny: Cedar forbids the agent touching
+           pricing, and the denylist enforces it in code too (PLAN.md §4.4). -->
+      <section id="pricing" class="pricing rule bg-[#F7F3EB]">
+        <div class="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <p class="eyebrow">Pricing</p>
+          <h2 class="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">
+            Priced per active card, not per seat
+          </h2>
+
+          <div class="pricing-table mt-10 grid gap-5 md:grid-cols-3">
+            <div class="tier tier-1 rounded border border-hairline bg-paper p-6">
+              <h3 class="font-display text-lg font-semibold">Studio</h3>
+              <p class="mt-1 text-sm text-muted">Up to 15 cards</p>
+              <p class="tier-price mt-5 font-display text-4xl font-semibold" data-gx-deny>
+                £6<span class="text-base font-normal text-muted"> / card / mo</span>
+              </p>
+              <ul class="mt-5 space-y-2 text-[0.95rem] text-muted">
+                <li>Receipt capture and matching</li>
+                <li>Xero and QuickBooks export</li>
+                <li>Two approval rules</li>
+              </ul>
+              <a href="/signup/success.html" class="tier-cta btn-quiet mt-6 w-full">Choose Studio</a>
+            </div>
+
+            <div class="tier tier-2 relative rounded border border-ink/15 bg-paper p-6 shadow-[0_1px_0_0_rgba(27,26,23,0.08)]">
+              <span class="tier-badge absolute -top-3 left-6 rounded bg-ink px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-wider text-paper">
+                Most popular
+              </span>
+              <h3 class="font-display text-lg font-semibold">Agency</h3>
+              <p class="mt-1 text-sm text-muted">Up to 60 cards</p>
+              <p class="tier-price mt-5 font-display text-4xl font-semibold" data-gx-deny>
+                £11<span class="text-base font-normal text-muted"> / card / mo</span>
+              </p>
+              <ul class="mt-5 space-y-2 text-[0.95rem] text-muted">
+                <li>Everything in Studio</li>
+                <li>Client and matter allocation</li>
+                <li>Unlimited approval rules</li>
+              </ul>
+              <div class="tier-expand mt-4 flex cursor-pointer select-none items-center justify-between text-[0.9rem] font-medium text-ink">
+                <span>See what's included</span>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M3.5 5.25 7 8.75l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+              <a href="/signup/success.html" class="tier-cta btn-solid mt-4 w-full">Choose Agency</a>
+            </div>
+
+            <div class="tier tier-3 rounded border border-hairline bg-paper p-6">
+              <h3 class="font-display text-lg font-semibold">Network</h3>
+              <p class="mt-1 text-sm text-muted">Unlimited cards</p>
+              <p class="tier-price mt-5 font-display text-4xl font-semibold" data-gx-deny>
+                Custom
+              </p>
+              <ul class="mt-5 space-y-2 text-[0.95rem] text-muted">
+                <li>Everything in Agency</li>
+                <li>NetSuite and SSO</li>
+                <li>Dedicated onboarding</li>
+              </ul>
+              <a href="/contact" class="tier-cta btn-quiet mt-6 w-full">Talk to sales</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Social proof — deliberately after pricing (flaw 3) ───────────── -->
+      <section id="customers" class="social-proof rule">
+        <div class="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <p class="eyebrow">Trusted by 400+ studios and agencies</p>
+          <div class="logo-band mt-6 flex flex-wrap items-center gap-x-10 gap-y-4 font-display text-lg text-muted">
+            <span>Marchmont&nbsp;&amp;&nbsp;Co</span>
+            <span>Halverd Studio</span>
+            <span>Nine Yards</span>
+            <span>Petrichor</span>
+            <span>Waybridge</span>
+          </div>
+          <figure class="testimonial mt-12 max-w-measure">
+            <blockquote class="font-display text-2xl leading-snug tracking-tight md:text-[1.75rem]">
+              “Month end went from four days to about six hours. The partners
+              stopped arguing about unbilled spend because the evidence was
+              already attached.”
+            </blockquote>
+            <figcaption class="mt-4 text-sm text-muted">
+              Priya Raman · Finance Director, Halverd Studio
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ── Integrations ─────────────────────────────────────────────────── -->
+      <section id="integrations" class="integrations rule bg-[#F7F3EB]">
+        <div class="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <h2 class="font-display text-3xl font-semibold tracking-tight">Works with what you already run</h2>
+          <div class="mt-8 grid gap-x-10 gap-y-3 text-[0.975rem] text-muted sm:grid-cols-2 md:grid-cols-4">
+            <span>Xero</span><span>QuickBooks Online</span><span>NetSuite</span><span>Sage Intacct</span>
+            <span>Harvest</span><span>Toggl Track</span><span>Amex Business</span><span>Brex</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Closing CTA ──────────────────────────────────────────────────── -->
+      <section class="closing rule">
+        <div class="mx-auto max-w-6xl px-6 py-16 text-center md:py-20">
+          <h2 class="mx-auto max-w-[24ch] font-display text-3xl font-semibold tracking-tight md:text-4xl">
+            Close the month without chasing a single receipt
+          </h2>
+          <a href="/signup/success.html" class="cta-footer btn-solid mt-8">Start free trial</a>
+        </div>
+      </section>
     </main>
+
+    <footer class="site-footer rule">
+      <div class="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-10 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+        <p>© 2026 Corrick Technologies Ltd</p>
+        <nav class="flex flex-wrap gap-6">
+          <a href="/privacy" class="hover:text-ink">Privacy</a>
+          <a href="/terms" class="hover:text-ink">Terms</a>
+          <a href="/security" class="hover:text-ink">Security</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

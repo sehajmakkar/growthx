@@ -1,14 +1,84 @@
+/* Corrick — Site A. PLAN.md §5.2.
+ *
+ * Self-hosted variable fonts, latin subset only. Google's CDN would be one more
+ * origin on the critical path, and this page's paint timing is the baseline the
+ * snippet's anti-flicker work (P3) is measured against — it has to be clean. */
+
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/fraunces-var-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Karla";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/karla-var-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Self-hosted faces land in P2. Declared here so the cascade is settled first. */
-:root {
-  color-scheme: light;
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: theme("colors.paper");
+    color: theme("colors.ink");
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Fraunces carries an optical-size axis; letting the browser drive it is what
+     keeps the display sizes from looking like a scaled-up text face. */
+  h1, h2, h3 {
+    font-optical-sizing: auto;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: theme("colors.terracotta");
+    color: theme("colors.paper");
+  }
+
+  :focus-visible {
+    outline: 2px solid theme("colors.terracotta");
+    outline-offset: 3px;
+  }
 }
 
-body {
-  background: theme("colors.paper");
-  color: theme("colors.ink");
-  -webkit-font-smoothing: antialiased;
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded px-5 py-3
+           font-medium transition-colors duration-150;
+  }
+  .btn-solid {
+    @apply btn bg-terracotta text-paper hover:bg-[#8F3B1B];
+  }
+  .btn-quiet {
+    @apply btn border border-hairline bg-transparent text-ink hover:bg-[#F4EFE6];
+  }
+  .rule {
+    @apply border-t border-hairline;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-muted;
+  }
 }
