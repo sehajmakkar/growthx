@@ -9,19 +9,10 @@
  *
  * Usage:  pnpm check:models
  */
-import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { loadEnv } from "./env.mjs";
 
-const env = {};
-try {
-  for (const line of readFileSync(new URL("../.env", import.meta.url), "utf8").split("\n")) {
-    const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-    if (m) env[m[1]] = m[2].trim();
-  }
-} catch {
-  console.error("✗ No .env found. Copy .env.example to .env first (GUIDE.md §B7).");
-  process.exit(1);
-}
+const env = loadEnv();
 
 const g = (k, d = "") => env[k] || process.env[k] || d;
 const ok = (s) => `\x1b[32m✓\x1b[0m ${s}`;

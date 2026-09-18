@@ -3,16 +3,12 @@
  * Verifies DATABASE_URL points at a reachable Postgres and reports what is there.
  * GUIDE.md §B9. Run this before P1; re-run any time the database looks wrong.
  */
-import { readFileSync } from "node:fs";
 import postgres from "postgres";
+import { loadEnv } from "./env.mjs";
 
-const env = {};
-try {
-  for (const line of readFileSync(new URL("../.env", import.meta.url), "utf8").split("\n")) {
-    const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-    if (m) env[m[1]] = m[2].trim();
-  }
-} catch {}
+// Values in .env may be quoted — Neon's URL contains `&`, which breaks shell
+// sourcing unless quoted, so the quotes must be stripped when reading it here.
+const env = loadEnv();
 
 const url = env.DATABASE_URL || process.env.DATABASE_URL;
 const ok = (s) => `\x1b[32m✓\x1b[0m ${s}`;
