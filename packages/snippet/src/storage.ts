@@ -99,3 +99,34 @@ export function writeCachedManifest(manifest: unknown): void {
     /* ignore */
   }
 }
+
+/**
+ * The session's experiment assignment, remembered across pages.
+ *
+ * A conversion almost always happens on a *different* page from the experiment
+ * — you are bucketed on the landing page and you convert on the success page,
+ * where no experiment runs. Without this, every conversion records a null
+ * variant and the arms cannot be compared at all: the experiment silently has
+ * no outcome data.
+ */
+const ASSIGNMENT_KEY = "_gx_a";
+
+export interface Assignment {
+  experimentId: string;
+  variantId: string;
+}
+
+export function readAssignment(): Assignment | null {
+  const raw = safeGet(ss(), ASSIGNMENT_KEY);
+  if (!raw) return null;
+  try {
+    const a = JSON.parse(raw) as Assignment;
+    return a && a.experimentId && a.variantId ? a : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeAssignment(a: Assignment): void {
+  safeSet(ss(), ASSIGNMENT_KEY, JSON.stringify(a));
+}

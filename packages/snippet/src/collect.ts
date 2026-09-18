@@ -77,6 +77,24 @@ export function record(
   }
 }
 
+/** Resolves once the in-flight batch has been handed to the network. Used by
+ *  the traffic swarm, which closes contexts far faster than a human closes a
+ *  tab and would otherwise destroy the page before the beacon left. */
+export function flushAsync(): Promise<void> {
+  if (!session || queue.length === 0) return Promise.resolve();
+  const body = JSON.stringify({ v: 1, ...session, events: queue });
+  queue = [];
+  if (timer !== null) { clearTimeout(timer); timer = null; }
+  return fetch(__GX_API__ + "/collect", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+    keepalive: true,
+    credentials: "omit",
+    mode: "cors",
+  }).then(() => undefined).catch(() => undefined);
+}
+
 export function flush(useBeacon: boolean): void {
   if (timer !== null) {
     clearTimeout(timer);

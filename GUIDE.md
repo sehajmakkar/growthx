@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P6 GATE PASSED — the architecture holds. Thu 18 Sept.
+**Last updated:** P7 complete — Thursday's checkpoint met in full. Thu 18 Sept.
 
 ### Phases
 
@@ -28,24 +28,25 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P4** — Event capture and ingestion | passed Thu 18 Sept |
 | ✅ | **P5** — DOM snapshot | passed Thu 18 Sept |
 | ✅ | **P6** — Selector grounding gate ⚠ | **PASSED** Thu 18 Sept |
-| ▶ | **P7** — Traffic swarm (1.75h) | next |
-| ⬜ | P8–P16 — Friday: aggregation, dashboard, agent | |
+| ✅ | **P7** — Traffic swarm | passed Thu 18 Sept |
+| ▶ | **P8** — Aggregation engine (1.25h) | next — Friday |
+| ⬜ | P9–P16 — Friday: dashboard, heatmaps, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
 
 **Next checkpoint:** Thu 22:00 — Site A live and instrumented, events flowing,
 snapshot captured, P6 gate passed, swarm producing traffic. (PLAN.md §1.4)
 
-**Time used so far:** P0–P6 ≈ 9h of the ~12h Thursday budget. On schedule, and the riskiest unknown is now closed.
+**Time used so far:** P0–P7 ≈ 11h of the ~12h Thursday budget. **Thursday's checkpoint is met in full** (PLAN §1.4): Site A live and instrumented, events flowing, snapshot captured, gate passed, swarm producing traffic.
 
 ### Your next action
 
-**Verify P6** using its block in §C below — `pnpm spike:selectors`, then read a
-couple of the generated mutation sets in `artifacts/spike/report.json` and ask
-whether you would ship them to your own homepage.
+**Verify P7** using its block in §C below. Run `pnpm swarm --sessions 20 --headed`
+and watch them for a minute — they should look like people, not robots. Then read
+`swarm/behaviour.ts`, which is the file a judge would ask about.
 
-Then merge the PR and say **"start P7"** — the traffic swarm, which is the last
-phase before Friday and unlocks everything downstream.
+Then merge the PR and say **"start P8"** — aggregation, which turns all this
+behaviour into the heatmaps you have been waiting to see.
 
 Setup from §B is complete and verified; nothing there is outstanding.
 
@@ -1188,6 +1189,127 @@ trivially while proving nothing about real markup.
   three are busy it waits. Re-run later.
 - **Match rates below the gate** are a code and prompt problem, and the escape
   routes above are the answer.
+
+---
+
+### P7 — Traffic swarm  [status: ✅ passed Thu 18 Sept]
+
+#### What this phase should have made true
+
+Thousands of realistic sessions on demand, so nothing downstream ever waits for
+data — and, critically, sessions whose behaviour **responds to the page** rather
+than to a number we chose.
+
+#### Run this
+
+```bash
+pnpm swarm --sessions 20 --headed     # watch them, once
+pnpm swarm --sessions 300             # the real volume, ~8-10 min
+pnpm query:events --summary
+```
+
+#### You should see
+
+Mobile converting **materially worse than desktop**, and the challenger
+converting better than control — neither of which is configured anywhere.
+
+```
+▸ By device
+  mobile      198 sessions    …% converted
+  desktop     102 sessions    …% converted
+
+▸ By variant — emergent, not configured
+  v_control          mobile   …
+  v_cta_above_copy   mobile   …
+```
+
+#### The thing to actually check — and it matters more than the numbers
+
+Open **`swarm/behaviour.ts`** and read it. It is the honest centre of the demo.
+
+Conversion probability is a function of **measured page geometry** — how far
+below the fold the CTA sits, how much copy precedes it, how much of the first
+screen the hero image eats — plus the persona's own traits. It never sees which
+variant is running. **Grep it for a variant id; there isn't one.**
+
+That is what makes the experiment result an emergent property of the simulation
+rather than something we typed in. When the agent lifts the CTA above the fold,
+these visitors respond because the geometry they read changed. If a judge asks
+*"did you just make your variant win?"*, the answer is that file, on screen.
+
+What the model does **not** claim: that these are real humans, or that the
+absolute rates predict real traffic. What it claims is directional — that burying
+a call to action under 280px of copy and a 30%-viewport illustration costs
+conversions on a phone. That is uncontroversial CRO, and it is what the geometry
+encodes.
+
+#### Watch twenty of them
+
+```bash
+pnpm swarm --sessions 20 --headed
+```
+
+They should look like plausible people: different viewports, different scroll
+depths, some stopping halfway, some poking repeatedly at the pricing accordion,
+some leaving in two seconds. If they look like robots teleporting, the behaviour
+model is wrong and everything downstream inherits that.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| Mobile and desktop convert the same | the behaviour model is not reading geometry — **stop, everything downstream becomes a lie** | code |
+| 0 conversions across 100+ sessions | intent values too low, or `.cta-primary` is not clickable | code |
+| `__name is not defined` | esbuild's keepNames helper leaking into `page.evaluate`; shimmed per context | code, fixed |
+| All sessions error | Site A unreachable, or Playwright browsers missing | environment |
+| Events arrive without `simulated: true` | the init script did not run before the snippet | code |
+| Sessions run fine but most deliver no events | CORS preflight on `/collect` — see below | code, fixed |
+
+#### Code bug or environment problem?
+
+- **Sessions run but no events land** → ingestion, not the swarm. Check
+  `pnpm query:events` and the `/collect` endpoint.
+- **Everything errors identically** → environment; check `pnpm dlx playwright
+  install chromium` and that Site A loads in your browser.
+- **Conversion rates that look implausible** → read `swarm/behaviour.ts` and
+  judge the model yourself. That is a design question, not a bug.
+
+#### The bug this phase uncovered, and why it hid so well
+
+Running sustained normal traffic for the first time exposed that **batched event
+delivery had been broken since P4** — roughly 85% of events silently dropped.
+
+The cause: the `/collect` route declared `OPTIONS` alongside `POST`. That
+overrides the HTTP API's built-in CORS handling, so the browser's preflight was
+routed to the Lambda, which found an empty body and replied **400**. A preflight
+must be 2xx, so Chrome blocked every batched `fetch`.
+
+Three things kept it invisible, and they are worth remembering because the same
+blind spots apply elsewhere:
+
+1. **`sendBeacon` uses `text/plain`**, which is a *simple* request and skips
+   preflight entirely. So events sent on tab-close always worked — and P4's
+   verification happened to test exactly that path.
+2. **`curl` ignores CORS.** Every manual probe returned `{"accepted":1}`.
+3. **The handler returned 202 on failure without logging.** CloudWatch showed
+   1221 clean invocations while the data never arrived.
+
+All three are fixed: the route is `POST` only, the handler answers `OPTIONS` with
+204 as a belt-and-braces measure, and failures are now logged even though the
+caller still gets a 202.
+
+**The lesson for later phases:** a test that only exercises the unload path will
+pass while normal browsing is broken. If you are ever verifying ingestion, browse
+the site *without* closing the tab and confirm events arrive anyway.
+
+#### Honesty rules this phase must keep
+
+1. Every event carries `simulated: true` and its persona. A real visitor's
+   browser cannot set those — they come from an init script the swarm injects.
+2. Nothing is written to the database directly. Simulated visitors drive the
+   **deployed** site through the **real** snippet into the **real** endpoint.
+   What is simulated is the person, and only the person.
+3. The dashboard badges simulated numbers (P10), and the video says so out loud.
 
 ---
 

@@ -12,9 +12,9 @@
  * it at the edge — which takes a cold Lambda off the critical render path.
  */
 import { bucketVariant, ANTIFLICKER_TIMEOUT_MS, ANTIFLICKER_TOTAL_MS, MANIFEST_MAX_AGE_S } from "@growthx/shared/runtime";
-import { identify, readCachedManifest, writeCachedManifest } from "./storage.js";
+import { identify, readCachedManifest, writeCachedManifest, readAssignment, writeAssignment } from "./storage.js";
 import { applyMutations, type ApplyResult, type Mutation } from "./apply.js";
-import { initCollector, record, flush } from "./collect.js";
+import { initCollector, record, flush, flushAsync } from "./collect.js";
 import { observe } from "./observe.js";
 import { captureSnapshot } from "./snapshot.js";
 import { deviceClassFor } from "@growthx/shared/runtime";
@@ -31,6 +31,8 @@ interface GxState {
   /** Exposed so the capture script can read the outline at several widths
    *  through the exact code path a real visitor runs. */
   snapshot?: () => ReturnType<typeof captureSnapshot>;
+  /** Flushes queued events and resolves when they are away. */
+  flush?: () => Promise<void>;
   version: string;
   siteId: string | null;
   visitorId?: string;
@@ -81,6 +83,7 @@ const state: GxState = {
   manifestSource: "none",
 };
 state.snapshot = captureSnapshot;
+state.flush = flushAsync;
 window.__growthx = state;
 
 const t0 = Date.now();
@@ -168,6 +171,8 @@ function run(m: Manifest, visitorId: string): void {
   state.experimentId = experiment.id;
   state.variantId = variantId;
 
+  if (variantId) writeAssignment({ experimentId: experiment.id, variantId });
+
   const variant = experiment.variants.filter((v) => v.id === variantId)[0];
   if (!variant || !variant.mutations.length) {
     state.applied = true; // nothing to apply is still a valid assignment
@@ -245,6 +250,14 @@ function run(m: Manifest, visitorId: string): void {
   state.visitorId = id.visitorId;
   state.sessionId = id.sessionId;
   state.isReturning = id.isReturning;
+
+  // Carry the session's assignment onto every page, so a conversion on the
+  // success page is attributed to the arm the visitor was actually exposed to.
+  const carried = readAssignment();
+  if (carried) {
+    state.experimentId = carried.experimentId;
+    state.variantId = carried.variantId;
+  }
 
   initCollector({
     siteId,

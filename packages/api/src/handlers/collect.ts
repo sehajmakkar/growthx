@@ -22,6 +22,11 @@ import { json, badRequest } from "../http.js";
 const originCache = new Map<string, string[]>();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+  // A preflight must never be answered with an error, whatever routes exist.
+  if ((event.requestContext?.http?.method ?? "").toUpperCase() === "OPTIONS") {
+    return json(204, null);
+  }
+
   let parsedBody: unknown;
   try {
     const raw = event.isBase64Encoded && event.body
@@ -61,6 +66,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       origin.startsWith("http://127.0.0.1");
 
     if (!originOk) {
+      console.warn("collect rejected origin", { origin, allowed, siteId: batch.siteId });
       return json(202, { accepted: 0, ignored: batch.events.length, reason: "origin not allowed", origin });
     }
 
@@ -92,8 +98,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     await db.insert(events).values(rows);
     return json(200, { accepted: rows.length });
   } catch (err) {
-    // Swallow: losing an event batch is strictly better than a customer's page
-    // seeing a failed request in the console.
+    // Swallowed for the caller — losing a batch beats breaking a customer's
+    // page — but never swallowed for us. Returning 202 without logging made a
+    // real data-loss bug invisible: CloudWatch showed clean invocations while
+    // most events were being dropped.
+    console.error("collect failed", {
+      siteId: batch.siteId,
+      sessionId: batch.sessionId,
+      events: batch.events.length,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return json(202, {
       accepted: 0,
       error: err instanceof Error ? err.message : String(err),
