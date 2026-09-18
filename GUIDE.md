@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P9 complete — screenshots and digests. Fri 19 Sept.
+**Last updated:** P10 complete — dashboard live. Fri 19 Sept.
 
 ### Phases
 
@@ -31,7 +31,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P7** — Traffic swarm | passed Thu 18 Sept |
 | ✅ | **P8** — Aggregation engine | passed Fri 19 Sept |
 | ✅ | **P9** — Screenshots + session digests | passed Fri 19 Sept |
-| ▶ | **P10** — Dashboard scaffold + design system (1.5h) | next — first pixels |
+| ✅ | **P10** — Dashboard scaffold + design system | passed Fri 19 Sept |
+| ▶ | **P11** — ★ Heatmap overlay (2h) | next — the hero screen |
 | ⬜ | P10–P16 — Friday: dashboard, heatmaps, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
@@ -1511,6 +1512,83 @@ a well-known time sink that buys nothing here (PLAN §1.2). The capture forces t
 
 The document dimensions printed at the end (`390 × 4685`, `1440 × 2960`) are what
 P11 projects event coordinates onto. Without them the overlay would be guessing.
+
+---
+
+### P10 — Dashboard scaffold and design system  [status: ✅ passed Fri 19 Sept]
+
+#### What this phase should have made true
+
+The Best-UI surface exists, on its own domain, reading live data — with the
+design decisions from PLAN §5.3 encoded as tokens so nothing drifts later.
+
+#### Run this
+
+```bash
+source .env.local && open "$GX_DASHBOARD_URL"
+pnpm dev:dashboard     # or locally on :5173
+```
+
+Click every nav item.
+
+#### You should see
+
+**Overview** with real figures: mobile CTA click rate against desktop, time to
+reach the CTA, and a plain-language paragraph naming where the objective leaks.
+**Heatmaps** with six working segments including converted-vs-bounced. Every other
+nav item reaching a **designed empty state** that says what will live there and
+which phase builds it — never a blank page or a 404.
+
+The objective and guardrail sit in the header on every screen. That is
+deliberate: the product's premise is that the agent holds a goal rather than
+taking instructions one at a time, and an objective hidden on a settings page
+would make the whole thing read as a variant generator with extra steps.
+
+#### Judge it yourself — this is the Best UI submission
+
+Open it at the width and zoom you will record the video at, and look for the
+tells in PLAN §5.1: default-Tailwind blue, purple gradients, glassmorphism,
+emoji as icons, Inter everywhere. If any of it reads as generic, say so now —
+it is cheap today and impossible on Saturday.
+
+Two structural choices support that:
+
+- **Tailwind's default colour palette is deleted, not extended.** A stray
+  `bg-blue-500` fails to compile. Default Tailwind blue is the fastest way to
+  look machine-generated, and making it impossible beats remembering not to use it.
+- **Numbers are always mono** with tabular figures. It is the cheapest thing that
+  makes a tool look like an instrument rather than a web page.
+
+#### Element ranking is not by popularity
+
+Sorting by view count surfaces the page header and the hero — things everyone
+sees and nobody interacts with. Elements rank by `attention × inaction +
+friction`, so what a growth team needs first rises: many saw it and few acted, or
+it is generating rage clicks.
+
+#### The bug this screen exposed
+
+The heatmap listed `div.tier-expand` with **0% saw it** — next to eleven dead
+clicks. Visitors had demonstrably clicked something the data said nobody saw.
+
+The IntersectionObserver was watching only `SNAPSHOT_SELECTOR`, a tag list
+(`a, button, h1…h4, p, img, section, …`). A `<div class="tier-expand">` matches
+none of it, so the accordion producing the page's friction was never observed for
+visibility, while clicks recorded it fine. Anything carrying a human-chosen class
+or `cursor: pointer` is now observed too.
+
+It now reads coherently, and says something more interesting:
+
+```
+div.tier-expand   viewed 12.7%   clicked 55.6%   dead clicks 10
+```
+
+Of the bounced mobile visitors who scroll far enough to see it, **more than half
+try to use it** — and nothing happens.
+
+This mattered beyond tidiness: P11 draws a marker per element, and a row claiming
+nobody saw something eleven people clicked would render as a visible
+contradiction on the screen judges look at longest.
 
 ---
 

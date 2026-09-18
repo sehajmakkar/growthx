@@ -23,17 +23,10 @@ const aws = (args) =>
     stdio: ["ignore", "pipe", "pipe"], encoding: "utf8",
   });
 
-// The dashboard is built in P10; until then it gets an honest placeholder so
-// the third origin is real and verifiable rather than a 404.
 const dashDir = path.join(root, "packages/dashboard/dist");
 if (!existsSync(dashDir)) {
-  mkdirSync(dashDir, { recursive: true });
-  writeFileSync(path.join(dashDir, "index.html"),
-    `<!doctype html><meta charset="utf-8"><title>GrowthX — dashboard</title>
-<body style="font:16px/1.6 system-ui;max-width:34rem;margin:20vh auto;padding:0 1.5rem;color:#14161A">
-<h1 style="font-weight:600">GrowthX dashboard</h1>
-<p style="color:#61656C">Origin provisioned in P1. The dashboard itself is built in P10.</p>
-</body>`);
+  console.error(bad("packages/dashboard/dist missing — run `pnpm build:dashboard` first."));
+  process.exit(1);
 }
 
 const jobs = [
