@@ -549,7 +549,7 @@ Purple/violet→blue gradients. Neon, glow, shadow-glow. Dark backgrounds with s
 A plausible B2B SaaS marketing page: **Corrick — expense controls for agencies that bill by the hour.** Static HTML + Tailwind CLI (compiled CSS, not the CDN script — the CDN build delays paint and would pollute our own flicker measurements). Wordmark logo: the word set in the display face with a single geometric mark; no stock illustration, no 3D shapes.
 
 - **Type:** `Fraunces` (variable optical serif) for headings — warm, editorial, has actual character; `Karla` for body and UI — a readable neutral grotesque with enough personality not to read as default. Both Google Fonts, subset and self-hosted so paint is fast.
-- **Palette:** warm paper `#FBF8F3`, ink `#1B1A17`, muted `#6E675C`, hairline border `#E6DFD4`, single accent terracotta `#C2542B` used only on the primary CTA and one underline. Secondary sage `#5C6B5A` for one supporting element. That is the whole palette.
+- **Palette:** warm paper `#FBF8F3`, ink `#1B1A17`, muted `#6E675C`, hairline border `#E6DFD4`, single accent terracotta `#B04A22` used only on the primary CTA and one underline (darkened from `#C2542B`, which measured 4.31:1 on paper and failed WCAG AA; the flaws in Site A are hierarchy and placement, never accessibility). Secondary sage `#5C6B5A` for one supporting element. That is the whole palette.
 - **Scale:** 1.25 ratio, measure capped at 62ch, generous vertical rhythm, 1px hairline borders, radius 6px, no shadows except a single 1px-offset hairline on the pricing card.
 - **The flaws — in hierarchy and placement, never in taste:**
   1. The primary CTA sits **below four lines of supporting copy** in the hero, pushing it under the fold at 390×844.

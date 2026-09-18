@@ -13,7 +13,7 @@ export default {
         ink: "#1B1A17",
         muted: "#6E675C",
         hairline: "#E6DFD4",
-        terracotta: "#C2542B",
+        terracotta: "#B04A22",
         sage: "#5C6B5A",
       },
       fontFamily: {

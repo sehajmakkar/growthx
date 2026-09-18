@@ -1,0 +1,11 @@
+# PLAN.md and GUIDE.md are hand-formatted and their layout carries meaning:
+# aligned tables, nested lists inside blockquotes, and deliberate line breaks.
+# Prettier's markdown formatter has already merged a numbered list item into a
+# paragraph here and mangled bold-inside-code spans, so it stays off these two.
+PLAN.md
+GUIDE.md
+
+pnpm-lock.yaml
+infra/cdk.out/
+packages/snippet/dist/
+sites/site-a/public/styles.css
