@@ -1,15 +1,23 @@
 import { readFileSync } from "node:fs";
 
-/** Reads .env the same way every script in this repo does: values may be
- *  quoted (Neon's URL contains `&`, which breaks shell sourcing unquoted). */
-export function loadEnv(file = new URL("../.env", import.meta.url)) {
+/**
+ * Reads the project's environment the same way every script here does.
+ *
+ * Two files, both required: `.env` holds secrets you wrote by hand, and
+ * `.env.local` holds the deployed URLs that `scripts/outputs.mjs` regenerates
+ * on every deploy. Values may be quoted — Neon's URL contains `&`, which breaks
+ * shell sourcing unless quoted — so quotes are stripped here.
+ */
+export function loadEnv(files = ["../.env", "../.env.local"]) {
   const env = {};
-  try {
-    for (const line of readFileSync(file, "utf8").split("\n")) {
-      const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-      if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
-    }
-  } catch {}
+  for (const f of files) {
+    try {
+      for (const line of readFileSync(new URL(f, import.meta.url), "utf8").split("\n")) {
+        const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+        if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+      }
+    } catch {}
+  }
   // Real environment variables fill gaps, but .env wins: it is the project's
   // source of truth and a stale exported shell var should never override it.
   const fromShell = Object.fromEntries(

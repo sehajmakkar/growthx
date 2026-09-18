@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P2 complete — Corrick landing page live. Thu 18 Sept.
+**Last updated:** P3 complete — snippet live, variants applying. Thu 18 Sept.
 
 ### Phases
 
@@ -24,8 +24,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P0** — Repo, toolchain, `GUIDE.md` | passed Thu 18 Sept |
 | ✅ | **P1** — AWS foundation deployed | passed Thu 18 Sept |
 | ✅ | **P2** — Site A landing page | passed Thu 18 Sept |
-| ▶ | **P3** — Snippet: bucketing, mutations, anti-flicker (1.75h) | next |
-| ⬜ | P4 — Event capture and ingestion (1.5h) | |
+| ✅ | **P3** — Snippet: bucketing, mutations, anti-flicker | passed Thu 18 Sept |
+| ▶ | **P4** — Event capture and ingestion (1.5h) | next |
 | ⬜ | P5 — DOM snapshot (0.75h) | |
 | ⬜ | P6 — Selector grounding spike ⚠ GATE (1.25h) | unblocked — runs on Gemini |
 | ⬜ | P7 — Traffic swarm (1.75h) | |
@@ -36,14 +36,13 @@ ten times more at 2am on Saturday than it does now.
 **Next checkpoint:** Thu 22:00 — Site A live and instrumented, events flowing,
 snapshot captured, P6 gate passed, swarm producing traffic. (PLAN.md §1.4)
 
-**Time used so far:** P0–P2 ≈ 3h of the ~12h Thursday budget. On schedule.
+**Time used so far:** P0–P3 ≈ 5h of the ~12h Thursday budget. On schedule.
 
 ### Your next action
 
-**Verify P2** using its block in §C below. Run `node scripts/check-site-a.mjs`,
-then look at Site A yourself at 390px and 1440px — the script measures the
-flaws, but only you can judge whether the page looks like a real company's.
-Then merge the PR and say **"start P3"**.
+**Verify P3** using its block in §C below. Run `pnpm check:flicker`, then open
+Site A with `?gx_force=v_cta_above_copy` at phone width and reload a few times
+watching for a blink. Then merge the PR and say **"start P4"**.
 
 Setup from §B is complete and verified; nothing there is outstanding.
 
@@ -746,6 +745,125 @@ There is no `data-gx-id` attribute on anything. Stamping stable ids on every
 element is the **escape route** for the P6 selector gate, not the starting point
 — using it now would make the gate pass trivially and tell us nothing about
 whether the approach works on a real page. If P6 fails, we add them then.
+
+---
+
+### P3 — The snippet: bucketing, mutations, anti-flicker  [status: ✅ passed Thu 18 Sept]
+
+#### What this phase should have made true
+
+One `<script>` tag in Site A's `<head>` decides which variant a visitor gets,
+rewrites the live DOM before anything is painted, and reveals. No flash, no
+blank page if our API dies, and the same visitor keeps the same variant.
+
+#### Run this
+
+```bash
+cd /Users/sehaj/Developer/Github/growthx
+pnpm check:flicker          # the real test — throttled, measured, 5 loads
+```
+
+Then look at it yourself, which is the part that matters:
+
+```bash
+source .env.local
+open "$GX_SITE_A_URL"                          # you get one arm or the other
+open "$GX_SITE_A_URL?gx_force=v_cta_above_copy"  # forces the challenger
+open "$GX_SITE_A_URL?gx_force=v_control"         # forces the control
+```
+
+#### You should see
+
+`pnpm check:flicker` green on all seven checks:
+
+| Check | What it proves |
+|---|---|
+| No control→challenger transition painted | **the flash does not happen** — this is the whole point |
+| Challenger applied on all 5 throttled loads | the experiment actually runs for slow mobile visitors |
+| Variant stable across 4 reloads | sticky bucketing works |
+| 14 fresh visitors split across both arms | the hash distributes |
+| Page renders with a dead manifest | our outage cannot break a customer's site |
+| It shows the *unmutated* control in that case | we fail safe, not weird |
+| `?gx_force=` applies 4 mutations and lifts the CTA | the override works for demos |
+
+In the browser with `?gx_force=v_cta_above_copy`, on a phone-width window: the
+announcement bar is gone, the hero illustration is gone, the CTA sits **above**
+the supporting copy and reads "See how it works". Reload a few times — it should
+never blink through the original first.
+
+#### One honest caveat: cold starts
+
+The very first request after the 30s edge cache expires pays a CloudFront miss
+plus a Lambda cold start — **measured at ~1255ms**. That load exceeds the
+snippet's 1000ms network budget, so the visitor sees the control and the session
+is marked `suppressed`, which keeps it out of the challenger's numbers in P4.
+
+This is reported by the script rather than hidden, and it is not a problem in
+practice: the manifest is cached at the edge for 30s and shared by every visitor
+of the page, so any site with real traffic keeps it warm. The five measured loads
+run against a warm edge for exactly that reason. If you run `check:flicker` twice
+in a row the second run is faster throughout.
+
+#### Watch for the flash yourself
+
+The script measures it, but do this once so you know what "clean" looks like:
+
+1. DevTools → Network → **Slow 4G**, Performance → **4× CPU slowdown**.
+2. Hard-reload `?gx_force=v_cta_above_copy` five times, watching the hero.
+3. You should never see "Start free trial" appear and then change.
+
+If you want to *see* the mechanism working, run with `NETWORK_BUDGET` exceeded —
+block the CDN in DevTools and reload. The page appears as the plain control,
+never blank. That is the designed failure mode.
+
+#### Inspect the live state
+
+Open the console on Site A:
+
+```js
+window.__growthx
+// { variantId: "v_cta_above_copy", applied: true,
+//   reason: "applied", revealedAfterMs: 120, manifestSource: "cache", ... }
+```
+
+- `reason: "applied"` — mutations landed before reveal. This is the good path.
+- `reason: "network-timeout"` with `suppressed: true` — the manifest was too slow,
+  so we revealed the original and **refused** to mutate afterwards. Safe, but the
+  visitor saw the control. If you see this often, the edge cache is not working.
+- `manifestSource: "cache"` — served from localStorage, no network at all. Expected
+  on any repeat visit within 30s.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| `applied=false`, `reason=network-timeout` on every load | manifest is not being served from the CloudFront edge | code |
+| A visible blink from "Start free trial" to "See how it works" | mutations applied after reveal — the ordering guarantee broke | code |
+| Page stays blank for more than a second | the reveal timers did not fire; should be impossible, both are registered before the fetch | code |
+| Every visitor gets the same arm | bucketing or the split is wrong | code |
+| `window.__growthx` is undefined | the snippet tag is missing from the HTML — re-run `pnpm build:site-a` | code |
+| Variant changes on every reload | localStorage is blocked (private window) — stickiness degrades by design | environment |
+
+#### Code bug or environment problem?
+
+- **Private/incognito windows** can block `localStorage`. The snippet falls back
+  to a per-pageview id, so stickiness breaks but nothing errors. That is expected
+  behaviour, not a bug — test stickiness in a normal window.
+- **`x-cache: Error from cloudfront` on `/manifest`** → the CDN behaviour has not
+  finished propagating (takes several minutes after a deploy). Wait, then retry.
+- **Anything about `GX_CDN_URL not set`** → `.env.local` is missing; run
+  `pnpm deploy:infra`.
+
+#### Re-seeding the experiment
+
+```bash
+pnpm seed:experiment        # idempotent; resets the experiment to running, 50/50
+```
+
+The hand-written challenger lifts the CTA above the copy, softens its wording,
+drops the hero art on mobile and hides the announcement bar. **The agent
+generates its own from data in P15** — this one exists only so P3 has something
+real to apply.
 
 ---
 

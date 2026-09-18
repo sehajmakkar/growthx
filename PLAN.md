@@ -659,7 +659,8 @@ Legend: **⏸ NEEDS YOU FIRST** — blocked on a setup step you must do. **⚠ G
 
 **I build:**
 - `g.js`: sticky `visitorId` (localStorage) + `sessionId` (sessionStorage, 30-min idle window); manifest fetch; **deterministic local bucketing** `fnv1a(visitorId + ':' + experimentId) % 100` against the split (§9.1 explains why this differs from your brief); mutation applier covering the full op set in §4.3; one re-apply retry at 400ms for late-rendering nodes; `?gx_force=<variantId>` override.
-- **Anti-flicker:** a synchronous inline pre-hide that sets `document.documentElement.style.visibility='hidden'` before the body parses; reveal on mutations-applied **or** on a hard 300ms timeout, whichever fires first; the timeout is registered *before* the fetch so a hung request can never leave a blank page; reveal is idempotent.
+- **Anti-flicker:** a synchronous inline pre-hide that sets `document.documentElement.style.visibility='hidden'` before the body parses; the reveal timers are registered *before* the fetch so a hung request can never leave a blank page; reveal is idempotent; and **once revealed the snippet refuses to mutate**, which is what makes the absence of a flash a property rather than a hope.
+- **Budget, corrected by measurement in P3:** the original ~300ms was unachievable — on throttled 4G the manifest request cannot begin until `g.js` has downloaded (~790ms in), and the round trip alone costs 150ms, so at 300ms the experiment silently never ran for slow mobile visitors. Now **1000ms** for the network with a **1500ms** absolute cap on staying hidden. Still tighter than every commercial CRO tool.
 - `manifest` Lambda: reads running experiments for `(site, path)` via GSI2, returns `{experiments:[{id, split, variants:[{id, mutations}]}]}`, CloudFront-cached 30s with `stale-while-revalidate`.
 - A hand-seeded two-variant experiment (`scripts/seed-experiment.ts`) so there is something to apply.
 

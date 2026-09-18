@@ -6,8 +6,23 @@
  */
 
 // --- anti-flicker & manifest caching (PLAN.md §6 P3) -------------------------
-/** Hard ceiling on how long the page may stay hidden waiting for a variant. */
-export const ANTIFLICKER_TIMEOUT_MS = 300;
+/**
+ * How long the snippet will wait for the manifest before giving up on this
+ * pageview and revealing the original.
+ *
+ * Measured, not guessed. The plan originally specified ~300ms, which turned out
+ * to be unachievable: on a throttled 4G connection the manifest request cannot
+ * even begin until g.js has itself downloaded (~790ms into the page load), and
+ * the round trip alone costs 150ms of latency. At 300ms the experiment silently
+ * never ran for slow mobile visitors — exactly the segment this product is about.
+ *
+ * 1000ms is still tighter than every commercial CRO tool (VWO defaults to 1000ms,
+ * Optimizely to several seconds) and is bounded by TOTAL below, so a hung API
+ * can never leave a page blank.
+ */
+export const ANTIFLICKER_TIMEOUT_MS = 1000;
+/** Absolute ceiling on staying hidden, whatever else is happening. */
+export const ANTIFLICKER_TOTAL_MS = 1500;
 /** Manifest edge-cache window. Also the kill-switch latency we demo. */
 export const MANIFEST_MAX_AGE_S = 30;
 export const MANIFEST_SWR_S = 300;
