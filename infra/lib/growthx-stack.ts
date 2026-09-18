@@ -187,7 +187,7 @@ export class GrowthxStack extends Stack {
     });
     grantSecrets(dashboardApi);
 
-    for (const route of ["/api/heatmap", "/api/funnel"]) {
+    for (const route of ["/api/heatmap", "/api/funnel", "/api/digests"]) {
       api.addRoutes({
         path: route,
         methods: [apigw.HttpMethod.GET],

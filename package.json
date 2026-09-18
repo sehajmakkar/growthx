@@ -19,7 +19,7 @@
     "dump:snapshot": "tsx scripts/dump-snapshot.mjs",
     "spike:selectors": "tsx scripts/selector-spike.mjs",
     "swarm": "tsx swarm/run.ts",
-    "screenshot": "node scripts/not-yet.mjs screenshot P9",
+    "screenshot": "node scripts/screenshot.mjs",
     "agent:run": "node scripts/not-yet.mjs agent:run P12",
     "e2e": "node scripts/not-yet.mjs e2e P21",
     "db:push": "pnpm --filter @growthx/db push",
@@ -30,7 +30,8 @@
     "check:flicker": "node scripts/check-flicker.mjs",
     "check:ingestion": "node scripts/check-ingestion.mjs",
     "capture:snapshot": "node scripts/capture-snapshot.mjs",
-    "aggregate": "tsx scripts/aggregate.mjs"
+    "aggregate": "tsx scripts/aggregate.mjs",
+    "digests": "tsx scripts/digests.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.2",
