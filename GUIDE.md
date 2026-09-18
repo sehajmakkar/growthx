@@ -388,12 +388,32 @@ the browser.
 > usually cannot push to a repo it was not granted. The browser flow issues an
 > OAuth token with full `repo` scope, which is what this workflow needs.
 >
-> If you already authenticated with a token, fix it with:
+> **If you are using a fine-grained token, it must be granted access to this
+> repo explicitly.** Go to
+> <https://github.com/settings/personal-access-tokens>, open the token, and set:
+>
+> | Setting | Value |
+> |---|---|
+> | Repository access | **Only select repositories** → add `growthx` (or *All repositories*) |
+> | Permissions → **Contents** | **Read and write** — required to push |
+> | Permissions → **Pull requests** | **Read and write** — required to open a PR per phase |
+> | Permissions → Metadata | Read-only (added automatically) |
+>
+> Save, then re-run `gh auth login` and paste the same token. Changes to a
+> fine-grained token take effect immediately; no new token is needed.
+>
+> **Diagnose it precisely** — this prints what the API demands versus what you
+> have, rather than making you guess:
 >
 > ```bash
-> gh auth logout --hostname github.com
-> gh auth login          # then pick "Login with a web browser"
+> curl -s -o /dev/null -D - -X PUT -H "Authorization: token $(gh auth token)" \
+>   https://api.github.com/repos/sehajmakkar/growthx/contents/.permcheck \
+>   -d '{"message":"x","content":"eA=="}' | grep -iE '^HTTP|x-accepted-github'
 > ```
+>
+> `HTTP/2 403` with `x-accepted-github-permissions: contents=write` means the
+> Contents permission is still missing. `HTTP/2 201` means it works (delete the
+> `.permcheck` file afterwards, or just ignore it — Claude will not commit it).
 
 **Verify:**
 
