@@ -143,9 +143,15 @@ export class GrowthxStack extends Stack {
     });
     grantSecrets(collect);
 
+    // POST only, deliberately. Adding OPTIONS here would route the CORS
+    // preflight to the Lambda instead of letting the HTTP API answer it — and
+    // the handler, finding an empty body, replied 400. A preflight must be 2xx,
+    // so every batched fetch was blocked by the browser. Only sendBeacon
+    // survived, because text/plain is a simple request and skips preflight
+    // entirely, which is exactly why this hid until the swarm ran.
     api.addRoutes({
       path: "/collect",
-      methods: [apigw.HttpMethod.POST, apigw.HttpMethod.OPTIONS],
+      methods: [apigw.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration("CollectIntegration", collect),
     });
 
@@ -164,7 +170,7 @@ export class GrowthxStack extends Stack {
 
     api.addRoutes({
       path: "/snapshot",
-      methods: [apigw.HttpMethod.POST, apigw.HttpMethod.OPTIONS],
+      methods: [apigw.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration("SnapshotIntegration", snapshot),
     });
 
