@@ -17,7 +17,7 @@
     "seed:experiment": "node scripts/seed-experiment.mjs",
     "query:events": "node scripts/query-events.mjs",
     "dump:snapshot": "tsx scripts/dump-snapshot.mjs",
-    "spike:selectors": "node scripts/not-yet.mjs spike:selectors P6",
+    "spike:selectors": "tsx scripts/selector-spike.mjs",
     "swarm": "node scripts/not-yet.mjs swarm P7",
     "screenshot": "node scripts/not-yet.mjs screenshot P9",
     "agent:run": "node scripts/not-yet.mjs agent:run P12",

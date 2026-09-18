@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P5 complete — page outline captured. Thu 18 Sept.
+**Last updated:** P6 GATE PASSED — the architecture holds. Thu 18 Sept.
 
 ### Phases
 
@@ -27,8 +27,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P3** — Snippet: bucketing, mutations, anti-flicker | passed Thu 18 Sept |
 | ✅ | **P4** — Event capture and ingestion | passed Thu 18 Sept |
 | ✅ | **P5** — DOM snapshot | passed Thu 18 Sept |
-| ▶ | **P6** — Selector grounding spike ⚠ GATE (1.25h) | **next — the gate** |
-| ⬜ | P7 — Traffic swarm (1.75h) | |
+| ✅ | **P6** — Selector grounding gate ⚠ | **PASSED** Thu 18 Sept |
+| ▶ | **P7** — Traffic swarm (1.75h) | next |
 | ⬜ | P8–P16 — Friday: aggregation, dashboard, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
@@ -36,16 +36,16 @@ ten times more at 2am on Saturday than it does now.
 **Next checkpoint:** Thu 22:00 — Site A live and instrumented, events flowing,
 snapshot captured, P6 gate passed, swarm producing traffic. (PLAN.md §1.4)
 
-**Time used so far:** P0–P5 ≈ 7.5h of the ~12h Thursday budget. On schedule.
+**Time used so far:** P0–P6 ≈ 9h of the ~12h Thursday budget. On schedule, and the riskiest unknown is now closed.
 
 ### Your next action
 
-**Verify P5** using its block in §C below. The important part is not the script —
-it is reading `pnpm dump:snapshot` yourself and asking whether *you* could write a
-correct selector for the hero CTA from that text alone. If you would be guessing,
-so will the model, and P6 will fail. Say so now rather than tomorrow.
+**Verify P6** using its block in §C below — `pnpm spike:selectors`, then read a
+couple of the generated mutation sets in `artifacts/spike/report.json` and ask
+whether you would ship them to your own homepage.
 
-Then merge the PR and say **"start P6"** — the gate.
+Then merge the PR and say **"start P7"** — the traffic swarm, which is the last
+phase before Friday and unlocks everything downstream.
 
 Setup from §B is complete and verified; nothing there is outstanding.
 
@@ -1112,6 +1112,82 @@ failure impossible rather than unlikely.
 pnpm dump:snapshot | grep -E 'cta-primary|hero-subcopy|pricing-table|tier-expand'
 pnpm dump:snapshot | wc -l
 ```
+
+---
+
+### P6 — Selector grounding gate ⚠️  [status: ✅ PASSED Thu 18 Sept]
+
+#### What this phase had to prove
+
+That a Flash-class model, given our page outline, emits selectors that **actually
+resolve on the live page**.
+
+This is the project's highest-risk assumption. If it fails, every generated
+mutation silently no-ops: the dashboard fills with variants, the agent looks
+busy, and nothing on the page ever changes. That failure is invisible from the
+outside — which is exactly why it was tested on day one rather than discovered
+on Saturday.
+
+#### Run this
+
+```bash
+pnpm spike:selectors            # 20 trials — takes several minutes
+GX_TRIALS=3 pnpm spike:selectors   # quick smoke test
+```
+
+#### You should see
+
+```
+  selectors resolving BEFORE repair   100.0%   (gate: ≥70%)
+  selectors resolving AFTER repair    100.0%   (gate: ≥95%)
+  verified against the LIVE page      100.0%
+  variants that broke the layout      0        (gate: 0)
+
+✓ GATE PASSED
+```
+
+**Both percentages matter and they say different things.** The *before* figure is
+whether the outline is legible enough to get it right first time. The *after*
+figure is whether the pipeline is safe to build on. A high after-figure propped
+up by a low before-figure would mean the repair loop is carrying the design — and
+repairs cost a model call each, which on a ~9/min budget is expensive.
+
+The full report, including every generated mutation set, lands in
+`artifacts/spike/report.json`.
+
+#### If it ever fails
+
+Escape routes, in order of preference (PLAN §6 P6):
+
+1. **Enrich the outline** — usually more text samples and explicit role hints.
+2. **Stamp `data-gx-id` on Site A's meaningful elements** and restrict the
+   generator to `[data-gx-id="..."]` selectors. Bulletproof, about 30 minutes,
+   and honestly what a real product would do via a first-party integration.
+3. **Turn generation into selection** — hand the model an enumerated list and let
+   it choose rather than author.
+
+Note that **none of these are currently in use**. Site A carries no `data-gx-id`
+attributes, deliberately: using them from the start would have made the gate pass
+trivially while proving nothing about real markup.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| `gave up after N attempts`, 0 calls | every model in the chain was unavailable | environment — retry in a few minutes |
+| `503 high demand` on one model | that model is at capacity for large prompts; the client now spills to the next | neither, handled |
+| Before-rate high, after-rate low | the repair loop is not helping; the outline is the problem | code |
+| Both rates low | the outline is not legible to the model — escape route 1 or 2 | code |
+| `variants that broke the layout > 0` | a mutation validates but renders badly; constrain the op set | code |
+| `No current snapshot` | run `pnpm capture:snapshot` first | environment |
+
+#### Code bug or environment problem?
+
+- **Anything mentioning 429, 503 or "high demand"** is Gemini capacity, not us.
+  The client serializes calls at ~9/min and spills across three models; if all
+  three are busy it waits. Re-run later.
+- **Match rates below the gate** are a code and prompt problem, and the escape
+  routes above are the answer.
 
 ---
 
