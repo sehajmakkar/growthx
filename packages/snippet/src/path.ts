@@ -116,11 +116,18 @@ export function domPath(el: Element | null): string | null {
     if (resolvesToOne(s)) return s;
   }
 
+  // An element with no id and no semantic class of its own gets at least one
+  // ancestor for context. A bare `img` or `a:nth-of-type(4)` may well resolve
+  // uniquely today, but it tells the model nothing about *what* it is, and it
+  // breaks the moment a second image appears. `figure.hero-figure > img` is
+  // both more legible and more stable.
+  const anonymous = !(el.id && isStableId(el.id)) && semanticClasses(el).length === 0;
+
   let path = segment(el);
-  if (resolvesToOne(path)) return path;
+  if (!anonymous && resolvesToOne(path)) return path;
 
   let node: Element | null = el.parentElement;
-  for (let depth = 0; depth < 4 && node && node.tagName !== "HTML"; depth++) {
+  for (let depth = 0; depth < 4 && node && node.tagName !== "HTML" && node.tagName !== "BODY"; depth++) {
     path = `${segment(node)} > ${path}`;
     if (resolvesToOne(path)) return path;
     // A descendant combinator is more tolerant of intermediate wrappers.
@@ -129,7 +136,11 @@ export function domPath(el: Element | null): string | null {
     node = node.parentElement;
   }
 
-  return resolvesToOne(path) ? path : null;
+  // Fall back to the bare segment only if nothing better was found: a selector
+  // that resolves is worth more than one that reads nicely.
+  if (resolvesToOne(path)) return path;
+  const bare = segment(el);
+  return resolvesToOne(bare) ? bare : null;
 }
 
 /** The nearest ancestor a person would consider "the thing they clicked". */

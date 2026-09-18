@@ -48,6 +48,25 @@ function spatial(el: Element | null, clientX: number, clientY: number) {
   };
 }
 
+/**
+ * Does this element invite a click? Cursor, role and tabindex are the signals a
+ * visitor actually reads. Without this check every click on a card's padding
+ * counts as friction, which inflates the exact signal the agent is meant to
+ * diagnose — a dead click should mean "I tried to use this and nothing
+ * happened", not "I clicked some whitespace".
+ */
+function looksClickable(el: Element | null): boolean {
+  let node: Element | null = el;
+  for (let i = 0; node && i < 3; i++) {
+    if (node.hasAttribute("role") || node.hasAttribute("tabindex")) return true;
+    try {
+      if (getComputedStyle(node).cursor === "pointer") return true;
+    } catch { /* detached node */ }
+    node = node.parentElement;
+  }
+  return false;
+}
+
 function isInteractive(el: Element | null): boolean {
   let node: Element | null = el;
   for (let i = 0; node && i < 4; i++) {
@@ -62,6 +81,7 @@ function isInteractive(el: Element | null): boolean {
 
 export function observe(ctx: Ctx, conversion: { kind: string; value: string }): void {
   const ids = () => ({ experimentId: ctx.experimentId, variantId: ctx.variantId });
+  let converted = false;
 
   // ── clicks, dead clicks, rage clicks ────────────────────────────────────
   const recent: { x: number; y: number; t: number }[] = [];
@@ -94,9 +114,10 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
         recent.length = 0;
       }
 
-      // Dead: a non-interactive target where nothing changed and nothing
-      // navigated. This is what the unwired accordion in .tier-2 produces.
-      if (!isInteractive(raw)) {
+      // Dead: something that looked clickable, was not, and where nothing
+      // changed and nothing navigated. This is exactly the unwired accordion in
+      // .tier-2 — and deliberately not the card's padding around it.
+      if (!isInteractive(raw) && looksClickable(raw)) {
         let mutated = false;
         const mo = new MutationObserver(() => { mutated = true; });
         mo.observe(document.body, { childList: true, subtree: true, attributes: true });
@@ -113,6 +134,7 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
       if (conversion.kind === "selector" && el) {
         try {
           if (el.matches(conversion.value) || el.closest(conversion.value)) {
+            converted = true;
             record("conversion", { ...ids(), selector, payload: { kind: "selector", value: conversion.value } });
             flush(true);
           }
@@ -184,7 +206,7 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
     } catch { /* ignore */ }
   }
 
-  function emitVisibility() {
+  function emitVisibility(snapshot: number) {
     const now = Date.now();
     firstSeen.forEach((ttfv, el) => {
       let total = visibleTotal.get(el) ?? 0;
@@ -193,7 +215,7 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
       if (!selector) return;
       record("element_view", {
         ...ids(), selector,
-        payload: { timeToFirstViewMs: Math.round(ttfv), visibleMs: Math.round(total) },
+        payload: { timeToFirstViewMs: Math.round(ttfv), visibleMs: Math.round(total), snapshot },
       });
     });
   }
@@ -219,20 +241,29 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
   );
 
   // ── exit behaviour ──────────────────────────────────────────────────────
-  // A back-exit is a visitor who arrived from this same site and left again
-  // within a few seconds: they did not find what the previous page promised.
-  let ended = false;
+  //
+  // Deliberately NOT latched. A visitor who switches tabs and comes back is
+  // still on the page, and latching would silently discard every subsequent
+  // second of visibility — which is what `viewed_pct` and
+  // `median_time_to_first_view` are computed from. Each hide emits a cumulative
+  // snapshot; aggregation takes the last one per (session, selector) rather
+  // than summing them.
+  let emitCount = 0;
+
   function onEnd() {
-    if (ended) return;
-    ended = true;
     sampleScroll();
     const elapsed = Date.now() - t0;
-    emitVisibility();
-    record("dwell", { ...ids(), selector: null, payload: { ms: elapsed, scope: "page" } });
+    emitVisibility(emitCount++);
+    record("dwell", { ...ids(), selector: null, payload: { ms: elapsed, scope: "page", snapshot: emitCount } });
 
+    // A back-exit means "the previous page promised something this one did not
+    // deliver". Someone who converted and closed the tab is the opposite of
+    // that, and counting them would poison the friction signal.
     let sameOrigin = false;
     try { sameOrigin = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch { /* ignore */ }
-    if (sameOrigin && elapsed < FRICTION_THRESHOLDS.backExitMs) {
+    const onConversionPage =
+      conversion.kind === "url" && location.pathname.indexOf(conversion.value) !== -1;
+    if (sameOrigin && !converted && !onConversionPage && elapsed < FRICTION_THRESHOLDS.backExitMs && emitCount === 1) {
       record("back_exit", { ...ids(), payload: { ms: elapsed } });
     }
     flush(true);
@@ -245,6 +276,7 @@ export function observe(ctx: Ctx, conversion: { kind: string; value: string }): 
 
   // ── conversion by URL ───────────────────────────────────────────────────
   if (conversion.kind === "url" && location.pathname.indexOf(conversion.value) !== -1) {
+    converted = true;
     record("conversion", { ...ids(), payload: { kind: "url", value: conversion.value } });
     flush(true);
   }

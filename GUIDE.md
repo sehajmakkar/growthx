@@ -959,6 +959,8 @@ two viewports.
 | `elem_frac` null on clicks | the click target had zero size | usually fine, e.g. clicking padding |
 | Duplicate-looking `element_view` rows | expected — they are emitted once per element at session end | neither |
 | `check:ingestion` reports missing types but `query:events` shows them | the test read the table mid-flight; it now waits for the count to settle | test, already fixed |
+| `custom {kind: "suppressed"}` and **no** `exposure` | the anti-flicker contract working: a cold edge meant the variant could not be applied before reveal, so the pageview is deliberately **not** attributed to that arm | neither — by design |
+| `timeToFirstViewMs: 0` on a whole batch | elements already in the first viewport are seen at t≈0 | neither — correct |
 
 #### Code bug or environment problem?
 
@@ -968,6 +970,25 @@ two viewports.
   disagree. Code, tell me.
 - **Events land but `simulated` is true** → you are looking at traffic-swarm rows
   from P7, not your own session. Filter by your session id.
+
+#### Three bugs your own browsing found that the script did not
+
+Worth recording, because they are the reason this guide asks you to browse the
+site yourself rather than only run the script. All three are now asserted in
+`check:ingestion` so they cannot come back.
+
+1. **Visibility stopped after the first tab switch.** `onEnd()` latched, so a
+   79-second session recorded element visibility only for its first 484ms.
+   `viewed_pct` and `median_time_to_first_view` are computed from exactly that
+   data, so P8 would have been wrong and would have looked fine. Each hide now
+   emits a cumulative snapshot and aggregation takes the last one per
+   (session, selector).
+2. **`back_exit` fired on the success page** — a visitor who converted and closed
+   the tab was being counted as a frustrated bounce.
+3. **`dead_click` fired on the pricing card's padding.** Only the unwired
+   accordion should count. A dead click has to mean "I tried to use this and
+   nothing happened", not "I clicked some whitespace" — otherwise it inflates the
+   precise signal the agent exists to diagnose.
 
 #### Inspect by hand
 

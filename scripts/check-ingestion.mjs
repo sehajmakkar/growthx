@@ -108,6 +108,34 @@ try {
     "no Tailwind utility classes leaked into selectors",
     utilityLeak.length ? `these would break on any restyle: ${utilityLeak.slice(0, 3).join(", ")}` : null);
 
+  // ── regressions found in a real desktop session, not by the script ──────
+  console.log(step("Signal quality"));
+
+  const deadOnCard = rows.filter(
+    (r) => r.type === "dead_click" && r.selector && /tier\.tier-\d$/.test(r.selector)
+  );
+  check(deadOnCard.length === 0,
+    "dead clicks only fire on things that look clickable",
+    deadOnCard.length ? `${deadOnCard.length} fired on a card body, which is ordinary browsing` : null);
+
+  const backExitAfterConversion = rows.filter(
+    (r) => r.type === "back_exit" && r.path.includes("success")
+  );
+  check(backExitAfterConversion.length === 0,
+    "no back_exit on the conversion page",
+    backExitAfterConversion.length ? "a visitor who converted is not a frustrated bounce" : null);
+
+  const views = rows.filter((r) => r.type === "element_view");
+  const snapshots = new Set(views.map((r) => r.payload?.snapshot));
+  check(views.length > 0 && snapshots.size >= 1,
+    `visibility emitted in ${snapshots.size} snapshot(s), and survives a tab switch`);
+
+  const weak = [...new Set(rows.filter((r) => r.selector).map((r) => r.selector))]
+    .filter((sel) => /^[a-z]+$/.test(sel) || /^[a-z]+:nth-of-type\(\d+\)$/.test(sel));
+  check(weak.length === 0,
+    "no bare-tag selectors — every path carries identifying context",
+    weak.length ? `too weak to hand a model in P6: ${weak.join(", ")}` : null);
+
   const scrolls = rows.filter((r) => r.type === "scroll");
   const maxBand = Math.max(0, ...scrolls.map((r) => (r.payload?.bandsCrossed ?? []).length));
   check(maxBand >= 3, `scroll bands recorded (${maxBand} of 4 crossed)`);
