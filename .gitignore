@@ -1,0 +1,28 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.local
+
+# cdk
+infra/cdk.out/
+infra/.cdk.staging/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+packages/agent/.venv/
+
+# playwright / spike artifacts
+artifacts/
+test-results/
+playwright-report/
+.playwright/
+
+# tailwind build output
+sites/*/public/styles.css
+
+# os
+.DS_Store

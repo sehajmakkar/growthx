@@ -1,0 +1,15 @@
+{
+  "name": "@growthx/site-a",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./public/styles.css --minify",
+    "dev": "concurrently -k -n css,serve -c cyan,magenta \"tailwindcss -i ./src/input.css -o ./public/styles.css --watch\" \"http-server public -p 4321 -c-1 --silent\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "http-server": "^14.1.1",
+    "tailwindcss": "^3.4.17"
+  }
+}

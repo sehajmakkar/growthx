@@ -1,0 +1,35 @@
+{
+  "name": "growthx",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --if-present typecheck",
+    "check:models": "node scripts/check-models.mjs",
+    "check:db": "node scripts/check-db.mjs",
+    "build:snippet": "pnpm --filter @growthx/snippet build",
+    "dev:site-a": "pnpm --filter @growthx/site-a dev",
+    "build:site-a": "pnpm --filter @growthx/site-a build",
+    "deploy:infra": "node scripts/not-yet.mjs deploy:infra P1",
+    "seed:experiment": "node scripts/not-yet.mjs seed:experiment P3",
+    "query:events": "node scripts/not-yet.mjs query:events P4",
+    "dump:snapshot": "node scripts/not-yet.mjs dump:snapshot P5",
+    "spike:selectors": "node scripts/not-yet.mjs spike:selectors P6",
+    "swarm": "node scripts/not-yet.mjs swarm P7",
+    "screenshot": "node scripts/not-yet.mjs screenshot P9",
+    "agent:run": "node scripts/not-yet.mjs agent:run P12",
+    "e2e": "node scripts/not-yet.mjs e2e P21"
+  },
+  "devDependencies": {
+    "postgres": "^3.4.9",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
