@@ -75,9 +75,11 @@ export function renderSnapshotForModel(snap: {
     const desk = e.aboveFoldAt1440 ? "desktop:above-fold" : "desktop:BELOW-FOLD";
     const role = e.isInteractive
       ? "interactive"
-      : e.childCount > 0
-        ? `container(${e.childCount})`
-        : "text";
+      : e.tag === "img" || e.tag === "svg" || e.tag === "video"
+        ? "media"
+        : e.childCount > 0
+          ? `container(${e.childCount})`
+          : "text";
     // A selector built from a stable id hides the element's own class names, so
     // `section#customers.social-proof` renders as `#customers` and the agent
     // loses the word "social-proof" entirely. Surfacing the classes costs a few

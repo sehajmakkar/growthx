@@ -1057,6 +1057,21 @@ stable `id` is pathed by that id, so `section#customers.social-proof` appears as
 `named:.social-proof` for exactly this case — the class is still the page's own
 vocabulary and the agent should have it, even though it targets by the selector.
 
+Two faults were found by reading this dump as the agent rather than as its
+author, and both are worth knowing because the same posture will be needed again
+in P13 and P15:
+
+- **Fold labels that were never measured.** The mobile pass finds more elements
+  than the desktop pass, because the "≥1% of viewport area" rule is ~4× stricter
+  at 1440×900 than at 390×844. Elements present in only one pass were defaulting
+  to `false` for the other width, which labelled a banner at `y=0%` as below the
+  desktop fold. Anything missing from a pass is now **measured on that page**
+  rather than assumed.
+- **Selectors with no identity.** `div > span:nth-of-type(6)` resolved uniquely
+  only because no other div had six spans. It tells a model nothing and breaks on
+  any added list item. A path must now carry an `#id` or a human-chosen class
+  before it is accepted, even when a shorter positional one would resolve.
+
 Things worth checking in the dump:
 - Is `.cta-primary` there, with its real text?
 - Is `.hero-subcopy` there, and does its `y=` position sit above the CTA's?
@@ -1064,6 +1079,10 @@ Things worth checking in the dump:
 - Is `.tier-2 .tier-expand` present? That is the friction element.
 - Are the selectors the same *shape* as the ones in `pnpm query:events`? They must
   be — same builder, same alphabet.
+- Does any element at `y=0%`–`y=2%` claim `desktop:BELOW-FOLD`? It should not; that
+  was the symptom of the unmeasured-fold bug.
+- `main` is the one selector with no id or class. That is fine — it is a landmark
+  element, unique by specification.
 
 #### Failure looks like
 

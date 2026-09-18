@@ -38,7 +38,8 @@ const DESKTOP = { width: 1440, height: 900 };
 
 const browser = await chromium.launch();
 
-async function captureAt(viewport) {
+/** Opens a page at a viewport and leaves it open so folds can be re-measured. */
+async function openAt(viewport) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const url = new URL(URL_);
@@ -60,48 +61,92 @@ async function captureAt(viewport) {
     );
   }
   const snap = await page.evaluate(() => window.__growthx.snapshot());
-  await ctx.close();
-  return snap;
+  return { snap, page, ctx };
+}
+
+/**
+ * Measures the fold for selectors a capture missed.
+ *
+ * The two passes do not see the same element set: the "≥1% of viewport area"
+ * rule is roughly four times stricter at 1440×900 than at 390×844, so plenty of
+ * small elements appear in the mobile pass only. Defaulting those to
+ * `aboveFold: false` would assert a fact never measured — and it did, labelling
+ * a banner at y=0% as below the desktop fold. Anything missing is measured
+ * directly instead.
+ */
+async function measureFolds(page, selectors) {
+  return page.evaluate((sels) => {
+    const out = {};
+    const vh = window.innerHeight;
+    for (const sel of sels) {
+      try {
+        const nodes = document.querySelectorAll(sel);
+        if (nodes.length !== 1) { out[sel] = null; continue; }
+        const r = nodes[0].getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) { out[sel] = null; continue; }
+        out[sel] = r.top + window.scrollY < vh;
+      } catch { out[sel] = null; }
+    }
+    return out;
+  }, selectors);
 }
 
 try {
   console.log(step(`Capturing ${URL_}`));
-  const mobile = await captureAt(MOBILE);
+  const m = await openAt(MOBILE);
+  const mobile = m.snap;
   console.log(ok(`mobile  ${MOBILE.width}×${MOBILE.height}  ${mobile.elements.length} elements  doc ${mobile.docH}px`));
-  const desktop = await captureAt(DESKTOP);
+  const d = await openAt(DESKTOP);
+  const desktop = d.snap;
   console.log(ok(`desktop ${DESKTOP.width}×${DESKTOP.height}  ${desktop.elements.length} elements  doc ${desktop.docH}px`));
+
+  // Cross-measure: whatever one pass missed, ask the other page directly.
+  const mobilePaths = new Set(mobile.elements.map((e) => e.path));
+  const desktopPathSet = new Set(desktop.elements.map((e) => e.path));
+  const missingOnDesktop = [...mobilePaths].filter((p) => !desktopPathSet.has(p));
+  const missingOnMobile = [...desktopPathSet].filter((p) => !mobilePaths.has(p));
+  const desktopExtra = missingOnDesktop.length ? await measureFolds(d.page, missingOnDesktop) : {};
+  const mobileExtra = missingOnMobile.length ? await measureFolds(m.page, missingOnMobile) : {};
+  console.log(ok(`cross-measured ${missingOnDesktop.length} on desktop, ${missingOnMobile.length} on mobile`));
+  await m.ctx.close();
+  await d.ctx.close();
 
   // Desktop is the base because it exposes the most elements (nothing is hidden
   // behind a mobile breakpoint); the mobile pass contributes its fold flags.
   const mobileByPath = new Map(mobile.elements.map((e) => [e.path, e]));
   const merged = [];
-  for (const d of desktop.elements) {
-    const m = mobileByPath.get(d.path);
+  let unmeasured = 0;
+
+  for (const el of desktop.elements) {
+    const mob = mobileByPath.get(el.path);
+    const at390 = mob ? mob.aboveFold : mobileExtra[el.path];
+    if (at390 === null || at390 === undefined) unmeasured++;
     merged.push({
-      path: d.path,
-      tag: d.tag,
-      classes: d.classes,
-      textSample: d.textSample,
-      rect: d.rect,
-      fontSizePx: d.fontSizePx,
-      fontWeight: d.fontWeight,
-      isInteractive: d.isInteractive,
-      aboveFoldAt390: m ? m.aboveFold : false,
-      aboveFoldAt1440: d.aboveFold,
-      childCount: d.childCount,
+      path: el.path, tag: el.tag, classes: el.classes, textSample: el.textSample,
+      rect: el.rect, fontSizePx: el.fontSizePx, fontWeight: el.fontWeight,
+      isInteractive: el.isInteractive,
+      aboveFoldAt390: at390 ?? false,
+      aboveFoldAt1440: el.aboveFold,
+      childCount: el.childCount,
     });
   }
-  // Elements only present at mobile width (a mobile-only nav, say) still matter.
-  const desktopPaths = new Set(desktop.elements.map((e) => e.path));
-  for (const m of mobile.elements) {
-    if (desktopPaths.has(m.path)) continue;
+
+  // Elements the desktop pass missed still matter — a mobile-only nav, or
+  // anything small enough to fall under the desktop area threshold.
+  for (const el of mobile.elements) {
+    if (desktopPathSet.has(el.path)) continue;
+    const at1440 = desktopExtra[el.path];
+    if (at1440 === null || at1440 === undefined) unmeasured++;
     merged.push({
-      path: m.path, tag: m.tag, classes: m.classes, textSample: m.textSample,
-      rect: m.rect, fontSizePx: m.fontSizePx, fontWeight: m.fontWeight,
-      isInteractive: m.isInteractive, aboveFoldAt390: m.aboveFold,
-      aboveFoldAt1440: false, childCount: m.childCount,
+      path: el.path, tag: el.tag, classes: el.classes, textSample: el.textSample,
+      rect: el.rect, fontSizePx: el.fontSizePx, fontWeight: el.fontWeight,
+      isInteractive: el.isInteractive,
+      aboveFoldAt390: el.aboveFold,
+      aboveFoldAt1440: at1440 ?? false,
+      childCount: el.childCount,
     });
   }
+  if (unmeasured) console.log(dim(`  ${unmeasured} fold values could not be measured at one width`));
 
   // Hash the structure, not the capture: re-running on an unchanged page must
   // not produce a new "version" for the agent to reason about.
