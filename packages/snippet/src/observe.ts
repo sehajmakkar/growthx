@@ -79,7 +79,7 @@ function isInteractive(el: Element | null): boolean {
   return false;
 }
 
-export function observe(ctx: Ctx, conversion: { kind: string; value: string }): () => void {
+export function observe(ctx: Ctx, conversion: { kind: string; value: string }): (useBeacon?: boolean) => void {
   const ids = () => ({ experimentId: ctx.experimentId, variantId: ctx.variantId });
   let converted = false;
 

@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P8 complete — heatmap data computed. Fri 19 Sept.
+**Last updated:** P9 complete — screenshots and digests. Fri 19 Sept.
 
 ### Phases
 
@@ -30,7 +30,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P6** — Selector grounding gate ⚠ | **PASSED** Thu 18 Sept |
 | ✅ | **P7** — Traffic swarm | passed Thu 18 Sept |
 | ✅ | **P8** — Aggregation engine | passed Fri 19 Sept |
-| ▶ | **P9** — Screenshots + session digests (1h) | next |
+| ✅ | **P9** — Screenshots + session digests | passed Fri 19 Sept |
+| ▶ | **P10** — Dashboard scaffold + design system (1.5h) | next — first pixels |
 | ⬜ | P10–P16 — Friday: dashboard, heatmaps, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
@@ -1425,6 +1426,91 @@ This is the third time a measurement has been right for the sessions that
 happened to be tested and wrong for the ones that mattered. The pattern is worth
 naming: **verify the segment you care about, not the one that is easiest to
 produce.**
+
+---
+
+### P9 — Screenshots and session digests  [status: ✅ passed Fri 19 Sept]
+
+#### What this phase should have made true
+
+The heatmap has a backdrop to draw on, and the agent has short behavioural
+narratives it can read instead of raw event streams.
+
+#### Run this
+
+```bash
+pnpm screenshot     # captures both widths, uploads to the CDN
+pnpm digests        # clusters sessions, then writes one sentence per cluster
+source .env.local
+curl -s "$GX_API_BASE/api/digests?path=/" | python3 -m json.tool | head -30
+```
+
+#### You should see
+
+Seven or so clusters, each with a sentence whose every figure traces back to a
+number in its `stats`. The one that matters:
+
+```
+54 sessions  mobile | stopped-before-pricing | brief | bounced
+  "In 54 mobile sessions with a median duration of 5.4 seconds and 28% scroll
+   depth, 100% of visitors saw the primary call to action but 0% clicked it."
+```
+
+Saw it. Did not act. That is the finding the whole product exists to surface, and
+it is written from statistics rather than from a model's impression of some
+events.
+
+#### The division of labour, and why it is that way
+
+**The clustering is deterministic SQL. The model writes only the sentence.**
+
+Letting a model group sessions would be slow, costly, non-reproducible, and —
+worst — it would put the untrustworthy component in charge of the part that has
+to be trustworthy. Two runs over the same data must produce the same clusters, or
+nobody can check the agent's reasoning against them.
+
+Narratives run on `gemini-3.1-flash-lite`, the cheapest model in the chain. This
+is the highest-count, lowest-stakes model use in the product: nothing downstream
+depends on the prose being elegant, and everything depends on the numbers being
+right — and those come from SQL.
+
+A cluster signature is four coarse facts: `device | reached-pricing? | dwell-band
+| outcome`. Coarse deliberately. Finer buckets produce many clusters of one
+session each, which is a list rather than a description.
+
+#### Two prompt corrections worth knowing about
+
+Both were caught by reading the output rather than by the script passing:
+
+1. The model wrote **"reached the pricing page"**. Site A is a single page; that
+   phrasing would have taught the agent the site has multiple pages it could
+   navigate between.
+2. A tightened prompt then produced *"did not reach the pricing section, click
+   the call to action, or convert"* — which **dropped the fact that 100% saw
+   it**. A group that saw something and did not act on it is the most useful
+   thing a summary can report, and omitting the view figure throws it away. The
+   prompt now requires both numbers whenever they differ.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| Fewer than 4 clusters | not enough sessions; run `pnpm swarm --sessions 200` | environment |
+| Narratives cite numbers not in `stats` | the prompt is letting the model speculate | code |
+| `[fallback]` instead of a model name | every model in the chain was busy; the deterministic sentence was used | neither, by design |
+| Screenshot shows a mutated page | capture forces the control arm and refuses otherwise | code, guarded |
+| `column ... is of type text[] but expression is of type record` | the HTTP driver sends JS arrays as records; build the array in SQL | code |
+| Screenshots return 403 after a deploy | `deploy:infra` used to `s3 sync --delete` the CDN bucket and remove `shots/`, which it does not manage. Now excluded — but if you add another out-of-band path to that bucket, exclude it too | code, guarded |
+
+#### Why screenshots are captured locally
+
+Site A changes approximately never, and packaging Chromium into a Lambda layer is
+a well-known time sink that buys nothing here (PLAN §1.2). The capture forces the
+**control** variant: an overlay of click data drawn over a screenshot of a
+*different* variant would be silently, confidently wrong.
+
+The document dimensions printed at the end (`390 × 4685`, `1440 × 2960`) are what
+P11 projects event coordinates onto. Without them the overlay would be guessing.
 
 ---
 

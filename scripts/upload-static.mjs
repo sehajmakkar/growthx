@@ -37,8 +37,13 @@ if (!existsSync(dashDir)) {
 }
 
 const jobs = [
+  // `shots/` is written by `pnpm screenshot`, not by this build, so the sync
+  // must not treat it as stale and delete it. It did once, and the heatmap
+  // backdrop vanished on the next deploy with a 403 that looked like a
+  // permissions problem rather than a self-inflicted one.
   { name: "g.js (CDN)", dir: path.join(root, "packages/snippet/dist"),
-    bucket: out.CdnBucketName, dist: out.CdnDistributionId, cacheControl: "public,max-age=60" },
+    bucket: out.CdnBucketName, dist: out.CdnDistributionId, cacheControl: "public,max-age=60",
+    keep: ["shots/*"] },
   { name: "Site A", dir: path.join(root, "sites/site-a/public"),
     bucket: out.SiteABucketName, dist: out.SiteADistributionId, cacheControl: "public,max-age=300" },
   { name: "Dashboard", dir: dashDir,
@@ -48,8 +53,11 @@ const jobs = [
 console.log(step("Uploading static assets"));
 for (const j of jobs) {
   if (!existsSync(j.dir)) { console.log(bad(`${j.name}: ${j.dir} does not exist`)); continue; }
-  aws(["s3", "sync", j.dir, `s3://${j.bucket}/`, "--delete",
-       "--cache-control", j.cacheControl]);
+  aws([
+    "s3", "sync", j.dir, `s3://${j.bucket}/`, "--delete",
+    ...(j.keep ?? []).flatMap((p) => ["--exclude", p]),
+    "--cache-control", j.cacheControl,
+  ]);
   aws(["cloudfront", "create-invalidation", "--distribution-id", j.dist, "--paths", "/*"]);
   console.log(ok(`${j.name} → ${j.bucket} ${dim("(invalidated)")}`));
 }
