@@ -39,7 +39,14 @@ export interface Summary {
   avg_seconds: number | null; conversion_pct: number | null;
 }
 
+export interface Run {
+  id: string; trigger: string; status: string;
+  steps: Record<string, unknown>[]; error: string | null;
+  started_at: string; finished_at: string | null;
+}
+
 export const api = {
+  runs: () => get<{ runs: Run[] }>("/api/runs"),
   points: (segment: string, mode: "clicks" | "attention", path = "/") =>
     get<{ mode: string; points: Point[] }>("/api/points", { segment, mode, path }),
   summary: (segment: string, path = "/") => get<Summary>("/api/summary", { segment, path }),

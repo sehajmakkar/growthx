@@ -20,7 +20,7 @@
     "spike:selectors": "tsx scripts/selector-spike.mjs",
     "swarm": "tsx swarm/run.ts",
     "screenshot": "node scripts/screenshot.mjs",
-    "agent:run": "node scripts/not-yet.mjs agent:run P12",
+    "agent:run": "packages/agent/.venv/bin/python -m growthx_agent.orchestrator",
     "e2e": "node scripts/not-yet.mjs e2e P21",
     "db:push": "pnpm --filter @growthx/db push",
     "db:studio": "pnpm --filter @growthx/db studio",
