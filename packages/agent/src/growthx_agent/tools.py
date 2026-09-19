@@ -344,3 +344,68 @@ def propose_experiment(
     errors = result.get("errors") or [str(result)[:200]]
     return ("REJECTED:\n" + "\n".join(f"  - {e}" for e in errors[:6])
             + "\nCorrect these and call propose_experiment again.")
+
+
+@tool
+def get_experiment_results(experiment_id: str) -> str:
+    """What an experiment actually showed: per-arm conversion rates with
+    confidence intervals, the difference and its interval, a per-device
+    breakdown, and whether the guardrail held.
+
+    Every figure is already computed. Do not calculate anything from these
+    numbers — not a lift, not a percentage, not a difference between two arms.
+    Quote them exactly as written here. If you need a figure that is not
+    present, say that it is not available rather than working it out.
+
+    Read the decision line first. If it says NOT YET DECISIVE, you may not
+    describe either arm as winning, however large the gap looks.
+
+    Args:
+        experiment_id: required. The experiment id, e.g. exp_hero_cta_placement.
+    """
+    d = _get("/api/results", experimentId=experiment_id)
+    if isinstance(d, dict) and d.get("error"):
+        return f"error: {d['error']}"
+    return d.get("text") or json.dumps(d)[:4000]
+
+
+@tool
+def write_learning(
+    experiment_id: str, generalisation: str, change_summary: str, segment: str, tags: str
+) -> str:
+    """Record what this experiment proved, for the next one to retrieve.
+
+    The outcome, the effect size, the interval and the confidence are taken
+    from the computed result — not from what you write here. You supply the one
+    sentence that generalises: what someone should believe about this site now
+    that they did not before.
+
+    Write it so it is still useful on a different page. "The CTA moved up and
+    conversion rose 2%" is a changelog entry. "On mobile, this audience does
+    not scroll past 280px of supporting copy to reach a call to action" is a
+    learning.
+
+    If the result was not decisive, say so in the sentence. An honest
+    inconclusive learning stops the next run re-testing the same question at
+    the same size.
+
+    Args:
+        experiment_id: required.
+        generalisation: required. One sentence, at least 30 characters.
+        change_summary: required. What was actually changed, in a few words.
+        segment: required. Which audience it applies to, e.g. "device=mobile"
+            or "all".
+        tags: required. Comma-separated, e.g. "cta,above-fold,mobile".
+    """
+    result = _post("/api/learnings", {
+        "experimentId": experiment_id,
+        "generalisation": generalisation,
+        "changeSummary": change_summary,
+        "segment": segment,
+        "tags": [t.strip() for t in tags.split(",") if t.strip()],
+    })
+    if result.get("stored"):
+        return (f"Recorded as {result['learningId']} — outcome {result['outcome']}, "
+                f"confidence {result['confidence']} (taken from the computed result, not your text).")
+    errors = result.get("errors") or [str(result)[:200]]
+    return "REJECTED:\n" + "\n".join(f"  - {e}" for e in errors[:4])

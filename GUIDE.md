@@ -2026,6 +2026,78 @@ first.
 
 ---
 
+### P20 — Results, attribution, learning written  [status: ✅ passed Sat 19 Sept]
+
+**What it adds.** The loop closes: a **Results** screen, an evaluator mode for
+the agent, and `write_learning`.
+
+**Verify it.**
+
+```bash
+pnpm check:results
+```
+
+Ends with `It reports what happened, including when nothing did.`
+
+**The statistics.** `packages/api/src/stats.ts` has no database and no model in
+it, so the arithmetic can be read on its own. Wilson intervals rather than the
+normal approximation — at a few hundred sessions an arm the Wald interval is
+too narrow and can produce bounds outside [0,1]. Newcombe's method for the
+difference, for the same reason: overstating certainty is the one direction an
+experiment tool must never err in.
+
+**What the checks actually prove.** Mostly refusals:
+
+| Check | Why |
+|---|---|
+| 2/50 vs 14/50 is **not** called a win | p is tiny, but neither arm reached the planned size. Early separation is the commonest way an A/B test lies |
+| Reaching the planned size with no gap is `no_difference`, not "not yet" | that is a result, and saying so stops the question being re-tested |
+| A guardrail breach overrides a winning primary metric | a variant that wins by creating confusion is not a win |
+| A killed experiment cannot produce a learning | something a human pulled did not reach a result |
+| The stored outcome is derived from the computed decision | if the agent could set it, it could write itself a win |
+
+**Run the evaluator.**
+
+```bash
+pnpm agent:evaluate <experimentId>
+```
+
+It uses four tools and normally finishes in three calls. The outcome, effect
+size and confidence come from the computed result; the agent supplies only the
+generalisation.
+
+**Read the learning it wrote, and judge it.** This is the sentence the product
+is judged on. It should say something about *the site and its audience* that is
+still useful on a different page — not restate the decision. On the run
+recorded here:
+
+> Moving the hero CTA above the supporting copy appears to help mobile
+> conversion while potentially hindering desktop, suggesting that future
+> iterations should be targeted by device rather than applied as a global
+> change.
+
+**If the sentence comes out weak** — restating the decision, or vague — the fix
+that worked was *not* more prompt-nudging. The per-device divergence is
+arithmetic on numbers we already have, so it is now computed in `results.ts`
+and handed to the agent as an explicit note. Anything deterministic stays out
+of the model (PLAN §2.2). Two earlier attempts at tightening the prompt alone
+produced sentences that still missed it.
+
+**On the guardrail.** The seeded experiments name `lead_quality`, which cannot
+be observed from client-side behaviour — we see what someone did on the page,
+not whether the lead was any good later. Rather than invent a number, the
+guardrail tracks **friction**: the share of sessions that rage- or dead-clicked.
+The dashboard header says the same thing, so the two do not contradict.
+
+| You see | What it means | Fix |
+|---|---|---|
+| `only a running experiment can conclude` | the experiment is `killed` or already `concluded` | intended; a killed experiment must not produce a learning |
+| The agent calls `write_learning` many times | a POST is being answered by a GET handler, so it never sees a confirmation | check route order in `dashboard.ts` — the POST branch must come first |
+| `malformed array literal` | the Neon HTTP driver does not bind JS arrays as Postgres arrays | build the literal explicitly, as `results.ts` does for tags |
+| `ModuleNotFoundError: growthx_agent` | the venv lost the editable install | `cd packages/agent && uv pip install -e .` |
+
+---
+
 ---
 
 ## §D — Demo-day runbook

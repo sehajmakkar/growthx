@@ -35,6 +35,8 @@ from .tools import (
     reset_budget,
     get_experiment_history,
     get_rejection_feedback,
+    get_experiment_results,
+    write_learning,
     get_funnel,
     get_heatmap,
     get_page_dom,
@@ -113,15 +115,77 @@ def _is_transient(message: str) -> bool:
     return any(marker in lowered for marker in _TRANSIENT)
 
 
-def run(trigger: str = "manual") -> int:
+EVALUATOR_PROMPT = """You are reading the result of a finished A/B test and
+writing down what it proved.
+
+The figures have already been computed. You are not being asked to calculate
+anything — not a lift, not a percentage, not a difference between two arms. If
+you find yourself doing arithmetic, stop and quote the number that was given to
+you instead.
+
+Read the decision line first and let it govern everything you write.
+
+  NOT YET DECISIVE means neither arm won. It does not mean "probably the
+  challenger". A gap that looks large is exactly what an underpowered
+  experiment produces, and saying otherwise is the single most damaging thing
+  this product could do. Do not use the words win, won, beat, better or
+  improvement about a result that is not decisive.
+
+  A row marked UNDERPOWERED is not evidence. You may say what it suggests and
+  what it would take to find out. You may not draw a conclusion from it.
+
+Then call `get_session_digest` and, where it helps, `get_heatmap`, to say *why*
+the arms behaved the way they did. The numbers say what happened; the digests
+describe how people moved through the page. Ground your explanation in them.
+
+Look hard at the per-device rows before you write anything. The interesting
+result is usually not the overall number — it is two segments moving in
+*opposite* directions, which an overall average hides completely. If one device
+went up while the other went down, that is the finding, and it is worth saying
+even when neither row is powered enough to prove it.
+
+Finally call `write_learning`. The outcome, effect size and confidence are taken
+from the computed result, not from your sentence — what you supply is the
+generalisation.
+
+The generalisation is a sentence about **the site and its audience**, not about
+the experiment. Do not restate the decision: the decision is already stored
+beside your sentence, and repeating it there wastes the one field that is meant
+to carry knowledge forward. Never begin with "The experiment...".
+
+  bad:  "The CTA was moved up and conversion rose 2%."
+        (a changelog entry — tells the next run nothing)
+  bad:  "The experiment was inconclusive due to insufficient sample size."
+        (restates the decision, which is already recorded)
+  good: "On mobile, this audience does not scroll past 280px of supporting copy
+         to reach a call to action."
+  good: "Moving the CTA above the supporting copy appears to help phones and
+         hurt desktop, so this change should be targeted by device rather than
+         applied to the whole page."
+
+A useful inconclusive learning names what was observed and what it would take to
+settle it — not merely that it was not settled.
+
+Then finish with:
+
+WHAT HAPPENED: one sentence, with the figures.
+WHY: one or two sentences grounded in the digests, in plain language.
+WHAT IT MEANS: what someone should do differently now.
+"""
+
+
+def _drive(tools, system_prompt: str, task: str, trigger: str) -> int:
+    """The model-chain loop, shared by both modes.
+
+    Quota and capacity on the free tier are per model, so a failure on one is
+    answered by moving to the next; two passes over the chain, because if every
+    model is limited at once the right move is to wait out the per-minute
+    window rather than give up.
+    """
     reset_budget()
     run_id = run_log.start_run(trigger)
     print(f"▸ run {run_id}")
     started = time.time()
-
-    tools = [get_heatmap, get_funnel, get_session_digest, get_page_dom,
-             get_experiment_history, get_rejection_feedback,
-             record_opportunity, propose_experiment]
 
     def _retry_after(message: str) -> float:
         """Gemini says how long to wait. The free-tier limit is per minute, not
@@ -131,23 +195,15 @@ def run(trigger: str = "manual") -> int:
         return min(75.0, float(match.group(1)) + 3) if match else 0.0
 
     last_error: Exception | None = None
-    # Two passes over the chain: the first spills across models, the second
-    # waits out a per-minute window if every model is rate-limited at once.
     for attempt in range(len(MODEL_CHAIN) * 2):
         model, name = build_model(attempt % len(MODEL_CHAIN))
         print(f"  model {name}")
         try:
-            agent = Agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT)
-            result = agent(
-                "Diagnose where this page is losing signups. Compare mobile "
-                "against desktop, and converted visitors against bounced ones. "
-                "Record the strongest opportunity you find, citing exact "
-                "figures from the tools. Then check what previous experiments "
-                "already proved, and propose an experiment to fix it."
-            )
+            agent = Agent(model=model, tools=tools, system_prompt=system_prompt)
+            result = agent(task)
             elapsed = time.time() - started
             text = str(result)
-            run_log.record_model(name, len(SYSTEM_PROMPT), len(text), int(elapsed * 1000))
+            run_log.record_model(name, len(system_prompt), len(text), int(elapsed * 1000))
             run_log.finish_run("succeeded")
 
             print(f"\n{text}\n")
@@ -167,10 +223,9 @@ def run(trigger: str = "manual") -> int:
             print(f"  {name} failed: {message[:140]}")
             if time.time() - started > WALL_CLOCK_S:
                 break
-            # Quota and capacity are per model, so both are answered by moving
-            # down the chain. Match on the human-readable text as well as the
-            # status codes: the SDK surfaces the prose, not the code, and
-            # matching only on "429" meant spillover never fired at all.
+            # Match on the human-readable text as well as the status codes: the
+            # SDK surfaces the prose, not the code, and matching only on "429"
+            # meant spillover never fired at all.
             if not _is_transient(message):
                 break
             wait = _retry_after(message)
@@ -178,8 +233,6 @@ def run(trigger: str = "manual") -> int:
                 print(f"  every model rate-limited; waiting {wait:.0f}s")
                 time.sleep(wait)
             else:
-                # A per-minute quota clears quickly; pause briefly before the
-                # next model so the chain is not spent in three seconds.
                 time.sleep(2)
 
     run_log.finish_run("failed", str(last_error) if last_error else "unknown")
@@ -187,5 +240,40 @@ def run(trigger: str = "manual") -> int:
     return 1
 
 
+def run(trigger: str = "manual") -> int:
+    """Diagnose, then propose."""
+    return _drive(
+        [get_heatmap, get_funnel, get_session_digest, get_page_dom,
+         get_experiment_history, get_rejection_feedback,
+         record_opportunity, propose_experiment],
+        SYSTEM_PROMPT,
+        "Diagnose where this page is losing signups. Compare mobile "
+        "against desktop, and converted visitors against bounced ones. "
+        "Record the strongest opportunity you find, citing exact "
+        "figures from the tools. Then check what previous experiments "
+        "already proved, and propose an experiment to fix it.",
+        trigger,
+    )
+
+
+def evaluate(experiment_id: str) -> int:
+    """Read a finished experiment and write down what it proved."""
+    return _drive(
+        [get_experiment_results, get_session_digest, get_heatmap, write_learning],
+        EVALUATOR_PROMPT,
+        f"Read the result of experiment {experiment_id}. Call "
+        f"get_experiment_results first and let the decision line govern what you "
+        f"may claim. Explain why the arms behaved as they did, grounded in the "
+        f"session digests. Then write the learning.",
+        "evaluate",
+    )
+
+
 if __name__ == "__main__":
-    sys.exit(run(sys.argv[1] if len(sys.argv) > 1 else "manual"))
+    args = sys.argv[1:]
+    if args and args[0] == "evaluate":
+        if len(args) < 2:
+            print("usage: python -m growthx_agent.orchestrator evaluate <experimentId>")
+            sys.exit(2)
+        sys.exit(evaluate(args[1]))
+    sys.exit(run(args[0] if args else "manual"))

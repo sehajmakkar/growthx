@@ -7,6 +7,7 @@ import { createOpportunity, listOpportunities } from "../opportunities.js";
 import { proposeExperiment, listExperiments, launchExperiment, listPolicyDecisions } from "../experiments.js";
 import { policyDocument } from "../policy.js";
 import { listApprovals, decideApproval, stopExperiment, rejectionFeedback } from "../approvals.js";
+import { experimentResults, resultsForModel, concludeExperiment, writeLearning } from "../results.js";
 import { requireSecret } from "../secrets.js";
 import { json, badRequest, serverError } from "../http.js";
 
@@ -63,6 +64,15 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         where site_id = ${siteId} and path = ${path} and is_current = true limit 1`);
       return json(200, (res.rows ?? [])[0] ?? { error: "no snapshot" });
     }
+    // Ahead of the GET below, which has no method guard of its own: a POST
+    // reaching it would be answered with the *list* of learnings, the agent
+    // would see no confirmation, and it would retry until its budget ran out.
+    // That is exactly what happened the first time this shipped.
+    if (route.endsWith("/learnings") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      const result = await writeLearning(db, siteId, body);
+      return json(result.stored ? 200 : 422, result);
+    }
     if (route.endsWith("/learnings")) {
       const res = await db.execute(sql`
         select id, hypothesis, generalisation, segment, outcome, tags, confidence, created_at
@@ -86,6 +96,23 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         ...policyDocument(),
         decisions: await listPolicyDecisions(db, siteId),
       });
+    }
+    // Read the experiment. Every figure is computed here, in SQL and
+    // TypeScript — the agent is given them and asked to explain them.
+    if (route.endsWith("/results")) {
+      const id = q.experimentId ?? "";
+      const r = await experimentResults(db, siteId, id);
+      // `text` is the same figures rendered for the agent. One endpoint, one
+      // computation: if the model and the dashboard read different code paths,
+      // the numbers on screen and the numbers in the report would drift.
+      return r
+        ? json(200, { ...r, text: resultsForModel(r) })
+        : badRequest("no such experiment", { experimentId: id });
+    }
+    if (route.endsWith("/experiments/conclude") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      const result = await concludeExperiment(db, siteId, body.experimentId);
+      return json(result.ok ? 200 : 422, result);
     }
     // The human gate. GET is the queue; POST is a decision on one item.
     if (route.endsWith("/approvals") && method === "POST") {

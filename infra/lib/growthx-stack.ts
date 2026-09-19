@@ -207,7 +207,7 @@ export class GrowthxStack extends Stack {
     for (const route of ["/api/heatmap", "/api/funnel", "/api/digests", "/api/points",
                          "/api/summary", "/api/snapshot", "/api/learnings", "/api/runs",
                          "/api/opportunities", "/api/experiments", "/api/policy",
-                         "/api/approvals", "/api/feedback"]) {
+                         "/api/approvals", "/api/feedback", "/api/results"]) {
       api.addRoutes({
         path: route,
         methods: [apigw.HttpMethod.GET],
@@ -219,7 +219,9 @@ export class GrowthxStack extends Stack {
                                ["/api/experiments", "DashExpPost"],
                                ["/api/experiments/launch", "DashExpLaunch"],
                                ["/api/experiments/stop", "DashExpStop"],
-                               ["/api/approvals", "DashApprovalsPost"]] as const) {
+                               ["/api/approvals", "DashApprovalsPost"],
+                               ["/api/experiments/conclude", "DashExpConclude"],
+                               ["/api/learnings", "DashLearningsPost"]] as const) {
       api.addRoutes({
         path: route,
         methods: [apigw.HttpMethod.POST],

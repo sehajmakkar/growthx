@@ -74,9 +74,15 @@ export function Shell() {
             </div>
             <div>
               <p className="label">Guardrail</p>
+              {/* Says what is actually measured. The objective above is the
+                  business goal; this is the thing we can observe from the page
+                  and therefore the thing we can enforce. Claiming a lead-quality
+                  guardrail here while the results screen explains that lead
+                  quality is not observable would be a contradiction a reader
+                  would rightly catch. */}
               <p className="mt-1 text-sm">
-                Lead quality must not fall below{" "}
-                <span className="num font-medium">95%</span> of baseline
+                Friction must not rise more than{" "}
+                <span className="num font-medium">5%</span> against control
               </p>
             </div>
           </div>

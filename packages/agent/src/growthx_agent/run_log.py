@@ -64,6 +64,15 @@ def _summarise(result: Any) -> str:
             return (f"{result.get('sessions', '?')} sessions, "
                     f"{len(result.get('elements', []))} elements, "
                     f"{len(result.get('friction', []))} friction signals")
+        # Before the generic "path" branch below, which would otherwise
+        # summarise an experiment result as "page outline, 0 elements".
+        if "decision" in result and "arms" in result:
+            arms = " vs ".join(
+                f"{a.get('converted')}/{a.get('exposed')}" for a in result.get("arms", []))
+            return f"{result['decision']} — {arms}"
+        if "stored" in result and "learningId" in result:
+            return (f"learning {result['learningId']} stored "
+                    f"({result.get('outcome')}, confidence {result.get('confidence')})")
         if "clusters" in result:
             return f"{len(result['clusters'])} behavioural clusters"
         if "steps" in result:
