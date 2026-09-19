@@ -270,3 +270,57 @@ def record_opportunity(
     return ("REJECTED — the evidence does not match the data:\n"
             + "\n".join(f"  - {e}" for e in errors[:6])
             + "\nQuote the figures exactly as the tools returned them, then call this again.")
+
+
+@tool
+def propose_experiment(
+    hypothesis: str, cited_learnings: str, variants_json: str
+) -> str:
+    """Propose an experiment: a falsifiable hypothesis and one or two variants.
+
+    Every selector is checked against the live page outline before anything is
+    stored. If a selector does not resolve you are told which one and given the
+    closest real alternatives — fix it and call this again.
+
+    You must cite prior learnings. Call get_experiment_history first. If none
+    apply, pass "none" and say why in the hypothesis.
+
+    Args:
+        hypothesis: required. A falsifiable statement naming the segment, the
+            change, the metric and the expected direction. State what would
+            disprove it.
+        cited_learnings: required. Comma-separated learning ids from
+            get_experiment_history, or "none".
+        variants_json: required. A JSON array of 1-2 objects, each with "label",
+            "rationale" and "mutations". Mutations use only these operations:
+              {"op":"replace_text","selector":"...","value":"...","note":"..."}
+              {"op":"set_style","selector":"...","props":{...},"note":"..."}
+              {"op":"set_media_style","selector":"...","media":"mobile","props":{...},"note":"..."}
+              {"op":"hide","selector":"...","note":"..."}
+              {"op":"move_before","selector":"...","target":"...","note":"..."}
+              {"op":"move_after","selector":"...","target":"...","note":"..."}
+            Selectors must be copied exactly from get_page_dom. Never target a
+            container — its text belongs to its children. Never touch pricing.
+    """
+    try:
+        variants = json.loads(variants_json)
+    except json.JSONDecodeError as exc:
+        return f"variants_json is not valid JSON: {exc}"
+
+    cited = [c.strip() for c in cited_learnings.split(",") if c.strip()]
+    result = _post("/api/experiments", {
+        "hypothesis": hypothesis,
+        "citedLearnings": cited,
+        "variants": variants,
+        "path": "/",
+    })
+
+    if result.get("stored"):
+        summary = ", ".join(
+            f"{v['label']} ({v['mutations']} mutations, {v['selectorsMatched']} selectors verified)"
+            for v in result.get("variants", [])
+        )
+        return f"Experiment {result['experimentId']} created as a draft. {summary}"
+    errors = result.get("errors") or [str(result)[:200]]
+    return ("REJECTED:\n" + "\n".join(f"  - {e}" for e in errors[:6])
+            + "\nCorrect these and call propose_experiment again.")

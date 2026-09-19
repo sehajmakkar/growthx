@@ -50,7 +50,19 @@ export interface Opportunity {
   segment_key: string; status: string; evidence: Record<string, unknown>[];
 }
 
+export interface Experiment {
+  id: string; hypothesis: string; status: string; split: Record<string, number>;
+  variants: { id: string; label: string; is_control: boolean; rationale: string;
+              mutations: unknown[]; validation: unknown }[];
+}
+export interface Learning {
+  id: string; generalisation: string; hypothesis: string; segment: string;
+  outcome: string; tags: string[]; confidence: string;
+}
+
 export const api = {
+  experiments: () => get<{ experiments: Experiment[] }>("/api/experiments"),
+  learnings: () => get<{ learnings: Learning[] }>("/api/learnings"),
   opportunities: () => get<{ opportunities: Opportunity[] }>("/api/opportunities"),
   runs: () => get<{ runs: Run[] }>("/api/runs"),
   points: (segment: string, mode: "clicks" | "attention", path = "/") =>

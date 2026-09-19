@@ -21,6 +21,7 @@ export default defineConfig({
     "import.meta.env.VITE_API_BASE": JSON.stringify(envValue("GX_API_BASE")),
     "import.meta.env.VITE_SITE_ID": JSON.stringify(envValue("GX_SITE_ID", "site_corrick")),
     "import.meta.env.VITE_CDN_URL": JSON.stringify(envValue("GX_CDN_URL")),
+    "import.meta.env.VITE_SITE_A_URL": JSON.stringify(envValue("GX_SITE_A_URL")),
   },
   build: { outDir: "dist", emptyOutDir: true },
 });
