@@ -19,6 +19,12 @@ export const SnapshotElement = z.object({
   fontSizePx: z.number(),
   fontWeight: z.number(),
   isInteractive: z.boolean(),
+  /** Marked data-gx-deny by the page, or inside something that is. The policy
+   *  gate refuses to touch these — see policies/growthx.cedar. Optional so
+   *  snapshots captured before P17 still parse. */
+  protected: z.boolean().optional().default(false),
+  /** The named page section this element sits in, e.g. "pricing". */
+  region: z.string().nullable().optional().default(null),
   aboveFoldAt390: z.boolean(),
   aboveFoldAt1440: z.boolean(),
   childCount: z.number().int(),

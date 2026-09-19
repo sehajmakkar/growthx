@@ -180,6 +180,23 @@ export class GrowthxStack extends Stack {
       handler: "handler",
       memorySize: 1024,
       timeout: Duration.seconds(30),
+      bundling: {
+        ...lambdaDefaults.bundling,
+        // Cedar's nodejs build reads its 4MB .wasm off disk relative to
+        // __dirname, so bundling it would break the load. Shipped as a real
+        // node_modules entry instead; esbuild leaves the require alone.
+        nodeModules: ["@cedar-policy/cedar-wasm"],
+        // growthx.cedar is read at runtime, so it has to travel with the
+        // handler. Copied rather than inlined so the file in the repo stays
+        // the only copy of the rules that exists.
+        commandHooks: {
+          beforeBundling: () => [],
+          beforeInstall: () => [],
+          afterBundling: (inputDir: string, outputDir: string) => [
+            `cp ${path.join(inputDir, "policies/growthx.cedar")} ${outputDir}`,
+          ],
+        },
+      },
       logGroup: new logs.LogGroup(this, "DashboardFnLogs", {
         retention: logs.RetentionDays.ONE_WEEK,
         removalPolicy: RemovalPolicy.DESTROY,
@@ -189,7 +206,7 @@ export class GrowthxStack extends Stack {
 
     for (const route of ["/api/heatmap", "/api/funnel", "/api/digests", "/api/points",
                          "/api/summary", "/api/snapshot", "/api/learnings", "/api/runs",
-                         "/api/opportunities", "/api/experiments"]) {
+                         "/api/opportunities", "/api/experiments", "/api/policy"]) {
       api.addRoutes({
         path: route,
         methods: [apigw.HttpMethod.GET],
@@ -198,7 +215,8 @@ export class GrowthxStack extends Stack {
     }
     for (const [route, id] of [["/api/aggregate", "DashAggregate"], ["/api/runs", "DashRunsPost"],
                                ["/api/opportunities", "DashOppPost"],
-                               ["/api/experiments", "DashExpPost"]] as const) {
+                               ["/api/experiments", "DashExpPost"],
+                               ["/api/experiments/launch", "DashExpLaunch"]] as const) {
       api.addRoutes({
         path: route,
         methods: [apigw.HttpMethod.POST],

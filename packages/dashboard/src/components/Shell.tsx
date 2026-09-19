@@ -15,6 +15,7 @@ const NAV = [
   { to: "/experiments", label: "Experiments" },
   { to: "/diff", label: "Variant diff" },
   { to: "/approvals", label: "Approvals" },
+  { to: "/policy", label: "Policy" },
   { to: "/learnings", label: "Learnings" },
   { to: "/reports", label: "Reports" },
   { to: "/runs", label: "Run log" },

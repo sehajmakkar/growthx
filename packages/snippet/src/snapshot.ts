@@ -28,6 +28,8 @@ export interface SnapshotElement {
   fontSizePx: number;
   fontWeight: number;
   isInteractive: boolean;
+  protected: boolean;
+  region: string | null;
   aboveFold: boolean;
   childCount: number;
 }
@@ -61,6 +63,29 @@ function ownText(el: Element): string {
     out = (el.textContent ?? "").replace(/\s+/g, " ").trim();
   }
   return redact(out).slice(0, 120);
+}
+
+/** The page declares its own off-limits areas with data-gx-deny. Recording it
+ *  here is what lets the policy gate decide from the page itself rather than
+ *  from a hardcoded list of selectors that drifts the moment the site changes. */
+function isProtected(el: Element): boolean {
+  try {
+    return el.closest("[data-gx-deny]") !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Which named section of the page this element lives in ("pricing",
+ *  "checkout", …). Used by the policy gate, so it must come from the markup. */
+function regionOf(el: Element): string | null {
+  try {
+    const section = el.closest("section[id], [data-gx-region]");
+    if (!section) return null;
+    return section.getAttribute("data-gx-region") || section.id || null;
+  } catch {
+    return null;
+  }
 }
 
 function isInteractive(el: Element): boolean {
@@ -147,6 +172,8 @@ export function captureSnapshot(): SnapshotCapture {
       fontSizePx,
       fontWeight,
       isInteractive: isInteractive(el),
+      protected: isProtected(el),
+      region: regionOf(el),
       aboveFold: pageTop < vh,
       childCount: el.children.length,
     });

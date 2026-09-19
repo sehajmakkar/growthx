@@ -10,6 +10,7 @@ import { Opportunities } from "./routes/Opportunities.js";
 import { Experiments } from "./routes/Experiments.js";
 import { Learnings } from "./routes/Learnings.js";
 import { Diff } from "./routes/Diff.js";
+import { Policy } from "./routes/Policy.js";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -28,6 +29,7 @@ createRoot(document.getElementById("root")!).render(
               subtitle="The agent may generate freely. It may not launch."
               body="Cedar policy is evaluated before every state-changing action. Launching an experiment is forbidden unless an approval record exists, so the queue is the policy working rather than a workflow bolted on top. Denials are shown here too."
               phase="P17–P19" />} />
+          <Route path="policy" element={<Policy />} />
           <Route path="learnings" element={<Learnings />} />
           <Route path="reports" element={
             <Placeholder title="Reports"
