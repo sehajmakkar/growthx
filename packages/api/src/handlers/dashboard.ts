@@ -4,6 +4,7 @@ import { segmentKey } from "@growthx/shared/runtime";
 import { getHeatmap, funnel, computeAll, heatmapPoints, pageSummary } from "../aggregate.js";
 import { getSessionDigest } from "../digests.js";
 import { createOpportunity, listOpportunities } from "../opportunities.js";
+import { proposeExperiment, listExperiments } from "../experiments.js";
 import { requireSecret } from "../secrets.js";
 import { json, badRequest, serverError } from "../http.js";
 
@@ -75,6 +76,14 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (route.endsWith("/opportunities")) {
       return json(200, { opportunities: await listOpportunities(db, siteId) });
+    }
+    if (route.endsWith("/experiments") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      const result = await proposeExperiment(db, siteId, path, body);
+      return json(result.stored ? 200 : 422, result);
+    }
+    if (route.endsWith("/experiments")) {
+      return json(200, { experiments: await listExperiments(db, siteId) });
     }
     if (route.endsWith("/points")) {
       const mode = (q.mode === "attention" ? "attention" : "clicks") as "clicks" | "attention";

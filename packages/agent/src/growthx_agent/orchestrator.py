@@ -30,6 +30,7 @@ from .config import MAX_ITERATIONS, MODEL_CHAIN, WALL_CLOCK_S
 from .model import build_model
 from .tools import (
     ToolBudgetExceeded,
+    propose_experiment,
     record_opportunity,
     reset_budget,
     get_experiment_history,
@@ -77,9 +78,23 @@ as you have enough to support one — do not keep gathering. A good one names
 a specific element or segment and quantifies the gap. A weak one restates a
 general principle.
 
+Once you have recorded an opportunity, propose an experiment to address the
+strongest one.
+
+Before you propose anything, call `get_experiment_history`. Previous experiments
+have already settled some questions, and re-testing them wastes traffic. If a
+prior learning supports your idea, cite it. If a prior learning says a change did
+nothing, do not propose that change again.
+
+Call `get_page_dom` and copy selectors from it exactly. Then call
+`propose_experiment` with a falsifiable hypothesis and one or two variants.
+Keep each variant to two to four mutations: fewer, well-chosen changes are easier
+to interpret than many at once.
+
 Then finish with:
 
 FINDING: one sentence naming the single biggest problem.
+HYPOTHESIS: what you are testing and what would disprove it.
 LIKELY CAUSE: one or two sentences in plain language, as you would say it to a
 marketer who has not seen the data.
 """
@@ -103,7 +118,7 @@ def run(trigger: str = "manual") -> int:
     started = time.time()
 
     tools = [get_heatmap, get_funnel, get_session_digest, get_page_dom,
-             get_experiment_history, record_opportunity]
+             get_experiment_history, record_opportunity, propose_experiment]
 
     def _retry_after(message: str) -> float:
         """Gemini says how long to wait. The free-tier limit is per minute, not
@@ -123,8 +138,9 @@ def run(trigger: str = "manual") -> int:
             result = agent(
                 "Diagnose where this page is losing signups. Compare mobile "
                 "against desktop, and converted visitors against bounced ones. "
-                "Then record the two or three strongest opportunities you find, "
-                "citing exact figures from the tools."
+                "Record the strongest opportunity you find, citing exact "
+                "figures from the tools. Then check what previous experiments "
+                "already proved, and propose an experiment to fix it."
             )
             elapsed = time.time() - started
             text = str(result)
