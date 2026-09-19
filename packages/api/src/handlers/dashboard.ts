@@ -75,7 +75,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (route.endsWith("/learnings")) {
       const res = await db.execute(sql`
-        select id, hypothesis, generalisation, segment, outcome, tags, confidence, created_at
+        select id, experiment_id, hypothesis, generalisation, segment, outcome,
+               tags, confidence, effect, created_at
         from learnings where site_id = ${siteId} order by created_at desc limit 50`);
       return json(200, { learnings: res.rows ?? [] });
     }

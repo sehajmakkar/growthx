@@ -84,7 +84,7 @@ export async function verifyEvidence(
             actual = el[field];
             matched = close(num(actual), num(item.value));
             if (!matched) {
-              errors.push(`${item.sourceRef}: says ${item.value}, data says ${actual}`);
+              errors.push(`${item.sourceRef}: says ${item.value}, data says ${describe(actual)}`);
             }
           }
         } else if (kind === "scroll") {
@@ -93,14 +93,14 @@ export async function verifyEvidence(
             .find((b) => Number(b.depth_pct) === depth);
           actual = band?.reach_pct ?? null;
           matched = close(num(actual), num(item.value));
-          if (!matched) errors.push(`${item.sourceRef}: says ${item.value}, data says ${actual}`);
+          if (!matched) errors.push(`${item.sourceRef}: says ${item.value}, data says ${describe(actual)}`);
         } else {
           const step = parts[2];
           const row = (agg.funnel as Record<string, unknown>[] ?? [])
             .find((f) => f.step === step);
           actual = row?.sessions ?? null;
           matched = close(num(actual), num(item.value));
-          if (!matched) errors.push(`${item.sourceRef}: says ${item.value}, data says ${actual}`);
+          if (!matched) errors.push(`${item.sourceRef}: says ${item.value}, data says ${describe(actual)}`);
         }
       } else if (kind === "digest") {
         const signature = parts.slice(1).join(":");
@@ -127,6 +127,16 @@ export async function verifyEvidence(
   }
 
   return { ok: errors.length === 0, verified, errors };
+}
+
+/** "data says undefined" reads like a bug in the checker rather than a problem
+ *  with the citation, and the agent has to act on this text. Say what actually
+ *  happened instead. */
+function describe(actual: unknown): string {
+  if (actual === undefined || actual === null) {
+    return "there is no such figure in the stored data — check the selector and field name";
+  }
+  return String(actual);
 }
 
 export async function createOpportunity(

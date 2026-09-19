@@ -38,6 +38,7 @@ ten times more at 2am on Saturday than it does now.
 | ▶ | **P14** — Hypothesis + learning memory (1h) | next |
 | ✅ | P10–P16 — dashboard, heatmaps, agent, variant diff | passed Sat 19 Sept |
 | ✅ | P17, P19 — policy gate, approval queue | passed Sat 19 Sept |
+| ✅ | P20, P21 — results, learning, e2e | passed Sun 20 Sept |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
 
@@ -2095,6 +2096,55 @@ The dashboard header says the same thing, so the two do not contradict.
 | The agent calls `write_learning` many times | a POST is being answered by a GET handler, so it never sees a confirmation | check route order in `dashboard.ts` — the POST branch must come first |
 | `malformed array literal` | the Neon HTTP driver does not bind JS arrays as Postgres arrays | build the literal explicitly, as `results.ts` does for tags |
 | `ModuleNotFoundError: growthx_agent` | the venv lost the editable install | `cd packages/agent && uv pip install -e .` |
+
+---
+
+### P21 — One command, and every screen checked  [status: ✅ passed Sun 20 Sept]
+
+**The command you will actually use before recording.**
+
+```bash
+pnpm e2e --check      # changes nothing, ~10 seconds
+```
+
+It asks every screen whether it has the data it needs, and prints the fix
+beside anything that does not. Run it before each take.
+
+**The other modes.**
+
+```bash
+pnpm e2e                    # full: snapshot → traffic → aggregate → agent →
+                            # refuse → conclude → evaluate → queue a card
+pnpm e2e --fast             # skip traffic and agent calls (~2 min)
+pnpm e2e --sessions 300     # how much traffic to drive
+```
+
+**Agent stages are skipped, never fatal.** The free tier is roughly 20 requests
+a minute per model. If every model is rate-limited, the stage is reported as
+skipped and the pipeline continues on what is already stored. An e2e that
+cannot finish because a third party rate-limited you is not a safety net, and
+the hour before recording is exactly when you need one.
+
+It always ends with the readiness report, and with a fresh card in the approval
+queue for shot 7.
+
+**What P21 also found and fixed.**
+
+1. *A heading rendering white on white.* The theme defines a `--base` colour
+   variable, so Tailwind generates **`text-base` as a colour utility** — it sets
+   `color: var(--base)`, the page background. It looks like a font-size class
+   and is not one. If a heading ever vanishes, this is why; size it explicitly.
+2. *`variants=[object Object]` in the run log* — tool arguments were template-
+   stringed, so an array of variants told the reader nothing. Summarised by
+   shape now.
+3. *`data says undefined`* from the evidence verifier, which reads like a bug in
+   the checker rather than a problem with the citation. It now says the figure
+   does not exist and to check the selector and field name.
+
+**Click every screen yourself.** The automated audit checks that each route
+renders, has content, is not stuck loading and contains no `[object Object]`,
+`NaN` or error text. It cannot tell you something is *ugly*. All twelve routes
+pass, including `/nonexistent-page`.
 
 ---
 
