@@ -13,6 +13,7 @@ const NAV = [
   { to: "/heatmaps", label: "Heatmaps" },
   { to: "/opportunities", label: "Opportunities" },
   { to: "/experiments", label: "Experiments" },
+  { to: "/diff", label: "Variant diff" },
   { to: "/approvals", label: "Approvals" },
   { to: "/learnings", label: "Learnings" },
   { to: "/reports", label: "Reports" },

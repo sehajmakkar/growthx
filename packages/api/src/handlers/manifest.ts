@@ -21,6 +21,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const q = event.queryStringParameters ?? {};
   const siteId = q.site;
   const path = q.path ?? "/";
+  // Preview lets the dashboard render a *draft* experiment side by side before
+  // anyone approves it. Deliberately explicit and never cached: a draft must
+  // never reach a real visitor, which is the whole point of the approval gate.
+  const preview = q.preview;
   if (!siteId) return badRequest("missing ?site");
 
   try {
@@ -29,16 +33,18 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     const [site] = await db.select().from(sites).where(eq(sites.id, siteId)).limit(1);
     if (!site) return badRequest("unknown site", { siteId });
 
-    const running = await db
-      .select()
-      .from(experiments)
-      .where(
-        and(
-          eq(experiments.siteId, siteId),
-          eq(experiments.path, path),
-          eq(experiments.status, "running")
-        )
-      );
+    const running = preview
+      ? await db.select().from(experiments).where(eq(experiments.id, preview))
+      : await db
+          .select()
+          .from(experiments)
+          .where(
+            and(
+              eq(experiments.siteId, siteId),
+              eq(experiments.path, path),
+              eq(experiments.status, "running")
+            )
+          );
 
     const out = [];
     for (const exp of running) {
@@ -63,9 +69,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         conversion: site.conversion,
         experiments: out,
       },
-      {
-        "cache-control": `public, max-age=${MANIFEST_MAX_AGE_S}, stale-while-revalidate=${MANIFEST_SWR_S}`,
-      }
+      preview
+        ? { "cache-control": "no-store" }
+        : {
+            "cache-control": `public, max-age=${MANIFEST_MAX_AGE_S}, stale-while-revalidate=${MANIFEST_SWR_S}`,
+          }
     );
   } catch (err) {
     // A failing manifest must never block a customer's page: the snippet treats
