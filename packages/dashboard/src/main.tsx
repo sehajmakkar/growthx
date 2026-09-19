@@ -6,6 +6,7 @@ import { Overview } from "./routes/Overview.js";
 import { Heatmaps } from "./routes/Heatmaps.js";
 import { Placeholder } from "./routes/Placeholder.js";
 import { Runs } from "./routes/Runs.js";
+import { Opportunities } from "./routes/Opportunities.js";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -15,11 +16,7 @@ createRoot(document.getElementById("root")!).render(
         <Route element={<Shell />}>
           <Route index element={<Overview />} />
           <Route path="heatmaps" element={<Heatmaps />} />
-          <Route path="opportunities" element={
-            <Placeholder title="Opportunities"
-              subtitle="Ranked problems the agent found, each with the data it reasoned from."
-              body="The analyst reads the heatmap, funnel and session digests and surfaces ranked opportunities. Every one carries at least three pieces of evidence pointing back at the row it came from — an opportunity that asserts a number it cannot source is rejected by the tool, not by the model's goodwill."
-              phase="P13" />} />
+          <Route path="opportunities" element={<Opportunities />} />
           <Route path="experiments" element={
             <Placeholder title="Experiments"
               subtitle="Running and concluded tests, with honest statistics."

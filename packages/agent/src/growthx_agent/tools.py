@@ -40,7 +40,7 @@ class ToolBudgetExceeded(BaseException):
     """
 
 
-_MAX_CALLS = 14
+_MAX_CALLS = 24
 _calls = {"n": 0}
 
 
@@ -208,3 +208,65 @@ def get_experiment_history() -> str:
         f"- {l['generalisation']} (segment: {l.get('segment')}, outcome: {l.get('outcome')})"
         for l in items
     )
+
+
+def _post(endpoint: str, body: dict[str, Any]) -> Any:
+    _calls["n"] += 1
+    if _calls["n"] > _MAX_CALLS:
+        raise ToolBudgetExceeded(f"{_MAX_CALLS} tool calls without reaching a conclusion")
+    started = time.time()
+    try:
+        response = _client.post(f"{API_BASE}{endpoint}", json={**body, "site": SITE_ID})
+        payload = response.json()
+        error = None if response.status_code < 400 else str(payload)[:200]
+    except Exception as exc:  # noqa: BLE001
+        payload = {"error": str(exc)}
+        error = str(exc)
+    record_step(
+        tool=endpoint.rsplit("/", 1)[-1],
+        params={k: v for k, v in body.items() if k != "evidence"},
+        result=payload, ms=int((time.time() - started) * 1000), error=error,
+    )
+    return payload
+
+
+@tool
+def record_opportunity(
+    title: str, body: str, confidence: str, segment: str, evidence_json: str
+) -> str:
+    """Record a conversion problem you have found, with the evidence for it.
+
+    Every figure you cite is checked against the stored data before this is
+    accepted. If a number does not match, the opportunity is rejected and you
+    are told which citation failed — fix it and call this again.
+
+    Args:
+        title: required. One sentence naming the problem, with its key figure.
+        body: required. Two or three sentences a marketer would accept, saying
+            what is happening and why it matters.
+        confidence: required. "high", "medium" or "low".
+        segment: required. The audience segment this is about, e.g. "device=mobile".
+        evidence_json: required. A JSON array of at least 3 objects, each with
+            "kind", "label", "value" and "sourceRef". sourceRef must be one of:
+              heatmap:<segment>:<selector>:<field>   e.g. heatmap:device=mobile:a.cta-primary.btn-solid:click_rate_pct
+              funnel:<segment>:<step>                e.g. funnel:device=mobile:converted
+              scroll:<segment>:<depth>               e.g. scroll:device=mobile:75
+              digest:<signature>                     e.g. digest:mobile | stopped-before-pricing | brief | bounced
+            The "value" must be the figure exactly as the tool returned it.
+    """
+    try:
+        evidence = json.loads(evidence_json)
+    except json.JSONDecodeError as exc:
+        return f"evidence_json is not valid JSON: {exc}. Return a JSON array."
+
+    result = _post("/api/opportunities", {
+        "title": title, "body": body, "confidence": confidence,
+        "segmentKey": segment, "evidence": evidence, "path": "/",
+    })
+
+    if result.get("stored"):
+        return f"Recorded. {len(evidence)} evidence items, all verified against stored data."
+    errors = result.get("errors") or [str(result)[:200]]
+    return ("REJECTED — the evidence does not match the data:\n"
+            + "\n".join(f"  - {e}" for e in errors[:6])
+            + "\nQuote the figures exactly as the tools returned them, then call this again.")
