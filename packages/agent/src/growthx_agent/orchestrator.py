@@ -34,6 +34,7 @@ from .tools import (
     record_opportunity,
     reset_budget,
     get_experiment_history,
+    get_rejection_feedback,
     get_funnel,
     get_heatmap,
     get_page_dom,
@@ -81,7 +82,8 @@ general principle.
 Once you have recorded an opportunity, propose an experiment to address the
 strongest one.
 
-Before you propose anything, call `get_experiment_history`. Previous experiments
+Before you propose anything, call `get_experiment_history` and
+`get_rejection_feedback`. Previous experiments
 have already settled some questions, and re-testing them wastes traffic. If a
 prior learning supports your idea, cite it. If a prior learning says a change did
 nothing, do not propose that change again.
@@ -118,7 +120,8 @@ def run(trigger: str = "manual") -> int:
     started = time.time()
 
     tools = [get_heatmap, get_funnel, get_session_digest, get_page_dom,
-             get_experiment_history, record_opportunity, propose_experiment]
+             get_experiment_history, get_rejection_feedback,
+             record_opportunity, propose_experiment]
 
     def _retry_after(message: str) -> float:
         """Gemini says how long to wait. The free-tier limit is per minute, not

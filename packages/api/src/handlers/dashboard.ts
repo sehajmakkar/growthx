@@ -6,6 +6,7 @@ import { getSessionDigest } from "../digests.js";
 import { createOpportunity, listOpportunities } from "../opportunities.js";
 import { proposeExperiment, listExperiments, launchExperiment, listPolicyDecisions } from "../experiments.js";
 import { policyDocument } from "../policy.js";
+import { listApprovals, decideApproval, stopExperiment, rejectionFeedback } from "../approvals.js";
 import { requireSecret } from "../secrets.js";
 import { json, badRequest, serverError } from "../http.js";
 
@@ -85,6 +86,24 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         ...policyDocument(),
         decisions: await listPolicyDecisions(db, siteId),
       });
+    }
+    // The human gate. GET is the queue; POST is a decision on one item.
+    if (route.endsWith("/approvals") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      const result = await decideApproval(db, siteId, body);
+      return json(result.ok ? 200 : 422, result);
+    }
+    if (route.endsWith("/approvals")) {
+      return json(200, { approvals: await listApprovals(db, siteId) });
+    }
+    // Read by the agent before it proposes: why a human turned something down.
+    if (route.endsWith("/feedback")) {
+      return json(200, { rejections: await rejectionFeedback(db, siteId) });
+    }
+    if (route.endsWith("/experiments/stop") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      const result = await stopExperiment(db, siteId, body);
+      return json(result.ok ? 200 : 422, result);
     }
     if (route.endsWith("/experiments/launch") && method === "POST") {
       const body = JSON.parse(event.body ?? "{}");

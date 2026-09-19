@@ -30,6 +30,8 @@
     "check:flicker": "node scripts/check-flicker.mjs",
     "check:diff": "node scripts/check-diff.mjs",
     "check:policy": "node scripts/check-policy.mjs",
+    "check:approvals": "tsx scripts/check-approvals.mjs",
+    "demo:queue": "tsx scripts/demo-queue.mjs",
     "check:ingestion": "node scripts/check-ingestion.mjs",
     "capture:snapshot": "node scripts/capture-snapshot.mjs",
     "aggregate": "tsx scripts/aggregate.mjs",

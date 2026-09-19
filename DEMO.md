@@ -200,11 +200,12 @@ re-recording at the end is not possible.
 | 4 | 0:48–1:08 | **Opportunities** → click *Show evidence* | Let the evidence table sit on screen | "The agent doesn't assert. Every figure it cites is resolved against the database before the opportunity is accepted — cited on the left, actual on the right. During this run, six citations were **rejected** until it quoted correctly." |
 | 5 | 1:08–1:28 | **Learnings**, then **Experiments** | Show the learning, then the hypothesis that used it | "And it remembers. This is what a previous experiment proved. The agent can't propose anything until it's checked what's already settled — and its new hypothesis is that learning applied." |
 | 6 | 1:28–1:50 | **Variant diff** | Both frames side by side, then hover a mutation row | "Both of these are the live page with the real snippet applying the real changes. Variants are structured DOM operations from a closed set — never generated HTML. Every one is reviewable, with the agent's own reason beside it." |
-| 7 | 1:50–2:15 | **Policy** | Click the top refusal, let the matching rule highlight in `growthx.cedar` on the right | "The agent is **not allowed** to launch on its own. That refusal names the policy that caused it, and here is that policy — this file is the authority, not a description of one." |
-| 7b | 2:15–2:25 | **Policy**, scroll to the pricing refusal | Point at `forbid-pricing-and-checkout` | "It also tried to cut the price. Permanently forbidden — approved or not. An agent that can edit its own prices can buy itself a win, and then you're measuring the discount, not the design." |
-| 8 | 2:15–2:35 | **Experiments / results** | Show per-arm rates and the uncertainty line | "It reads the result honestly. Not yet decisive — and it says so, instead of claiming a win." |
-| 9 | 2:35–2:50 | **Learnings** (new record) | Show the new learning and the next proposal | "Then it writes down what it learned, and proposes what to test next. That's the loop." |
-| 10 | 2:50–3:00 | **Architecture slide** | Hold still | "Strands and Cedar — both AWS open source — on Lambda, API Gateway, S3 and CloudFront. Deployed on AWS." |
+| 7 | 1:50–2:05 | **Approvals** | Point at the amber box at the top of the card | "The agent tried to launch this and was refused. That refusal *is* this request — it arrives carrying the policy that produced it. The agent may generate freely. It may not launch." |
+| 7b | 2:05–2:20 | **Approvals** → click **Approve and launch**, then open Site A in a fresh window | Click, wait for the line to appear, then switch to Site A and reload | "I approve it, by name. Now it re-runs the whole policy — approval is permission to *ask* again, not to skip the question — and it's live on the real site." |
+| 7c | 2:20–2:30 | **Policy** | Click the pricing refusal; the rule highlights in `growthx.cedar` beside it | "It also tried to cut the price. That one is refused permanently — approved or not, because a `forbid` beats every `permit`. An agent that can edit its own prices can buy itself a win, and then you're measuring the discount, not the design." |
+| 8 | 2:30–2:45 | **Experiments / results** | Show per-arm rates and the uncertainty line | "It reads the result honestly. Not yet decisive — and it says so, instead of claiming a win." |
+| 9 | 2:45–2:55 | **Learnings** (new record) | Show the new learning and the next proposal | "Then it writes down what it learned, and proposes what to test next. That's the loop." |
+| 10 | 2:55–3:05 | **Architecture slide** | Hold still | "Strands and Cedar — both AWS open source — on Lambda, API Gateway, S3 and CloudFront. Deployed on AWS." |
 
 **Shots that must carry the `SIMULATED TRAFFIC` chip on screen:** 3 and 8.
 
@@ -289,6 +290,19 @@ The honest framing: the value is not that Cedar is shorter than `if`. It is
 that the rules sit in a file a non-engineer can audit, the engine is
 default-deny, and every refusal names the rule that caused it — which is what
 the Policy screen renders.
+
+**Shot 7 is the only one you can "use up".** Approving it launches the
+experiment, so the card is no longer pending and the take cannot be repeated as
+filmed. To put it back:
+
+```bash
+pnpm demo:queue
+```
+
+That resets the experiment and asks the API to launch it again, so the policy
+refuses and produces a fresh request — the request is created the way it would
+be in real use, not inserted by hand. Re-run it between takes as often as you
+like.
 
 ## 6. If something breaks mid-recording
 
