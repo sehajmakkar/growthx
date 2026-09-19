@@ -23,6 +23,22 @@
 export const ANTIFLICKER_TIMEOUT_MS = 1000;
 /** Absolute ceiling on staying hidden, whatever else is happening. */
 export const ANTIFLICKER_TOTAL_MS = 1500;
+/**
+ * Budgets for ?gx_preview — the dashboard's variant-diff screen.
+ *
+ * A preview deliberately bypasses the CDN so a draft can never be edge-cached
+ * and served to a real visitor, which means it pays full origin latency
+ * (a cold Lambda is ~2s). Under the visitor budget the reveal timer wins, the
+ * snippet correctly refuses to mutate after reveal, and the review screen then
+ * shows the *control* in both frames while labelling one of them the
+ * challenger — a silent wrong answer on the one screen whose entire job is to
+ * show the difference.
+ *
+ * These apply only when gx_preview is present. No real visitor can be held for
+ * this long: the visitor path still uses ANTIFLICKER_* above.
+ */
+export const PREVIEW_TIMEOUT_MS = 6000;
+export const PREVIEW_TOTAL_MS = 8000;
 /** Manifest edge-cache window. Also the kill-switch latency we demo. */
 export const MANIFEST_MAX_AGE_S = 30;
 export const MANIFEST_SWR_S = 300;

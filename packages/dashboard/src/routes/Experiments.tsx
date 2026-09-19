@@ -1,5 +1,6 @@
 import { api } from "../api.js";
 import { useApi } from "../useApi.js";
+import { Link } from "react-router-dom";
 import { PageHeader, Empty, Thinking, ErrorNote } from "../components/ui.js";
 
 const SITE_A = import.meta.env.VITE_SITE_A_URL ?? "";
@@ -43,10 +44,16 @@ export function Experiments() {
               <div className="border-b border-border px-5 py-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="font-mono text-xs text-muted">{e.id}</span>
-                  <span className="chip" style={{
-                    color: `var(--${tone === "muted" ? "pending" : tone})`,
-                    background: `color-mix(in srgb, var(--${tone === "muted" ? "pending" : tone}) 10%, transparent)`,
-                  }}>{String(e.status).replace("_", " ")}</span>
+                  <div className="flex items-center gap-3">
+                    <Link to={`/experiments/${e.id}/diff`}
+                          className="text-[0.75rem] font-medium text-accent hover:underline">
+                      Compare side by side →
+                    </Link>
+                    <span className="chip" style={{
+                      color: `var(--${tone === "muted" ? "pending" : tone})`,
+                      background: `color-mix(in srgb, var(--${tone === "muted" ? "pending" : tone}) 10%, transparent)`,
+                    }}>{String(e.status).replace("_", " ")}</span>
+                  </div>
                 </div>
                 <p className="mt-2 max-w-measure text-sm leading-relaxed">{e.hypothesis}</p>
               </div>

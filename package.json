@@ -28,6 +28,7 @@
     "cdk:diff": "pnpm --filter @growthx/infra run diff",
     "check:site-a": "node scripts/check-site-a.mjs",
     "check:flicker": "node scripts/check-flicker.mjs",
+    "check:diff": "node scripts/check-diff.mjs",
     "check:ingestion": "node scripts/check-ingestion.mjs",
     "capture:snapshot": "node scripts/capture-snapshot.mjs",
     "aggregate": "tsx scripts/aggregate.mjs",

@@ -9,6 +9,7 @@ import { Runs } from "./routes/Runs.js";
 import { Opportunities } from "./routes/Opportunities.js";
 import { Experiments } from "./routes/Experiments.js";
 import { Learnings } from "./routes/Learnings.js";
+import { Diff } from "./routes/Diff.js";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -20,6 +21,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="heatmaps" element={<Heatmaps />} />
           <Route path="opportunities" element={<Opportunities />} />
           <Route path="experiments" element={<Experiments />} />
+          <Route path="experiments/:experimentId/diff" element={<Diff />} />
+          <Route path="diff" element={<Diff />} />
           <Route path="approvals" element={
             <Placeholder title="Approvals"
               subtitle="The agent may generate freely. It may not launch."

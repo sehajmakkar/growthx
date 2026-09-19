@@ -36,7 +36,7 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P12** — Agent skeleton | passed Sat 20 Sept |
 | ✅ | **P13** — Opportunities with verified evidence | passed Sat 19 Sept |
 | ▶ | **P14** — Hypothesis + learning memory (1h) | next |
-| ⬜ | P10–P16 — Friday: dashboard, heatmaps, agent | |
+| ✅ | P10–P16 — dashboard, heatmaps, agent, variant diff | passed Sat 19 Sept |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
 
@@ -1802,6 +1802,86 @@ The last run recorded **one** opportunity rather than the two or three requested
 It spent its tool budget gathering and then correcting rejected citations. One
 well-evidenced opportunity demonstrates the mechanism; with quota at ~20
 requests per minute per model, chasing a second was not worth the calls.
+
+---
+
+### P15 — The agent writes its own experiment  [status: ✅ passed Sat 19 Sept]
+
+**What it adds.** The agent reads a verified opportunity plus everything it has
+learned from past experiments, and proposes a variant: a hypothesis, and a set
+of structured mutations validated against the same schema the P6 gate uses. Two
+screens land with it — **Experiments** and **Learnings**.
+
+The point of this phase is the *memory*. A proposal must cite the learning it
+relied on, by id. That is checked, not trusted.
+
+**Run it.**
+
+```bash
+pnpm seed:learnings          # prior learnings, so there is a memory to consult
+pnpm agent:run -- --propose  # the agent reads, cites, proposes
+```
+
+**What you should see.** In the dashboard, **Experiments** shows the draft with
+its hypothesis and the learning it cited; **Learnings** shows the memory it read
+from.
+
+| You see | What it means |
+|---|---|
+| `proposal rejected: cited text, not an id` | working as intended — the agent paraphrased a learning instead of citing one. It re-reads and corrects. Worth showing on camera. |
+| `mutation rejected: op not permitted` | the agent tried something outside the closed op set (there is no `set_html`, ever) |
+| A draft appears with `status: draft` | correct. Drafts are deliberately **not** in the live manifest — nothing reaches a visitor without approval. |
+
+> The rejection-then-correction is the evidence that the memory is load-bearing
+> rather than decorative. If it never rejects anything, be suspicious.
+
+---
+
+### P16 — Variant diff  [status: ✅ passed Sat 19 Sept]
+
+**What it adds.** A side-by-side screen at **Experiments → Compare side by
+side**, showing control and challenger as two **live iframes of the real site**,
+with the mutation list beside them. Hovering a mutation highlights the element
+it touches, and each one carries the agent's own note explaining why.
+
+They are real iframes on purpose: it is the shipping snippet applying the
+stored mutations, so what you approve is exactly what a visitor gets. Nothing
+is mocked.
+
+**Verify it.**
+
+```bash
+pnpm check:diff <experimentId>     # the draft id from the Experiments screen
+```
+
+All checks should pass, ending with `The diff screen shows a real difference.`
+
+**What it is actually checking, and why.** A draft is not in the live manifest,
+so the screen asks for it explicitly with `?gx_preview=<experimentId>`. That
+request deliberately **bypasses the CDN**, so a draft can never be edge-cached
+and handed to a real visitor.
+
+The failure this check exists to catch is a silent one. Going to the origin
+means paying cold-Lambda latency (~2s), which is longer than the anti-flicker
+budget a real visitor gets. When that budget expires the snippet does the right
+thing and *refuses to mutate* — so both frames render the control while the
+screen still labels one of them the challenger, and you would approve a variant
+having never seen it. Preview therefore gets its own, longer budget
+(`PREVIEW_TIMEOUT_MS`); the visitor path is untouched.
+
+| You see | What it means | Fix |
+|---|---|---|
+| `… was not suppressed by the reveal timer` ✗ | the preview budget is too tight; the frames are showing the control | raise `PREVIEW_TIMEOUT_MS` in `packages/shared/src/runtime/constants.ts`, rebuild, redeploy |
+| `control and challenger are visibly different` ✗ | the variant's mutations did not resolve against the live DOM | open the diff screen; unresolved selectors are listed |
+| `appending ?preview to the CDN URL does not return the draft` ✗ | CloudFront started forwarding the `preview` query param — a draft could reach a real visitor | remove it from the cache policy's forwarded query strings |
+| Both frames blank | Site A is not deployed, or `GX_SITE_A_URL` is stale | `pnpm run deploy:infra` |
+
+**Also confirm the visitor path still holds** — this phase touches the snippet's
+reveal timers, which are the one thing that must never regress:
+
+```bash
+pnpm check:flicker      # must end with: Anti-flicker contract holds.
+```
 
 ---
 

@@ -11,7 +11,7 @@
  * The manifest is per (site, path), never per visitor, so CloudFront can cache
  * it at the edge — which takes a cold Lambda off the critical render path.
  */
-import { bucketVariant, ANTIFLICKER_TIMEOUT_MS, ANTIFLICKER_TOTAL_MS, MANIFEST_MAX_AGE_S } from "@growthx/shared/runtime";
+import { bucketVariant, ANTIFLICKER_TIMEOUT_MS, ANTIFLICKER_TOTAL_MS, PREVIEW_TIMEOUT_MS, PREVIEW_TOTAL_MS, MANIFEST_MAX_AGE_S } from "@growthx/shared/runtime";
 import { identify, readCachedManifest, writeCachedManifest, readAssignment, writeAssignment } from "./storage.js";
 import { applyMutations, type ApplyResult, type Mutation } from "./apply.js";
 import { initCollector, record, flush, flushAsync } from "./collect.js";
@@ -70,8 +70,6 @@ declare global {
  * painted yet anyway) than reveal the control and swap it a moment later. This
  * cap exists so that "keep waiting" can never become "blank page forever".
  */
-const NETWORK_BUDGET_MS = ANTIFLICKER_TIMEOUT_MS;
-const TOTAL_BUDGET_MS = ANTIFLICKER_TOTAL_MS;
 
 const state: GxState = {
   version: __GX_VERSION__,
@@ -134,6 +132,18 @@ function whenDomReady(fn: () => void): void {
     document.addEventListener("DOMContentLoaded", fn, { once: true });
   } else {
     fn();
+  }
+}
+
+/** ?gx_preview=<experimentId> — the dashboard's variant-diff screen reviewing a
+ *  draft. This is an internal review context, not a real visitor, which is why
+ *  it is allowed a longer budget below: on this screen a *wrong* frame is far
+ *  worse than a slow one, and there is nobody's conversion to protect. */
+function previewExperiment(): string | null {
+  try {
+    return new URLSearchParams(location.search).get("gx_preview");
+  } catch {
+    return null;
   }
 }
 
@@ -247,12 +257,24 @@ function run(m: Manifest, visitorId: string): void {
     return; // never hid the page, nothing to reveal
   }
 
+  // Decided before anything else, because it changes both the budget below and
+  // whether the manifest cache may be consulted at all.
+  const previewId = previewExperiment();
+
   hide();
 
   // Registered before the fetch, so a hung or unreachable API can never leave
   // the page blank. This ordering is the whole safety property.
-  setTimeout(() => reveal("network-timeout"), NETWORK_BUDGET_MS);
-  setTimeout(() => reveal("total-timeout"), TOTAL_BUDGET_MS);
+  //
+  // A preview skips the CDN (see below), so it pays full cold-Lambda latency —
+  // more than the visitor budget allows. Reviewing a draft against the visitor
+  // budget just renders the control and calls it the challenger, so the review
+  // screen gets its own ceiling. The timers still exist: a hung API reveals the
+  // unmutated page here too, it simply waits longer first.
+  const networkBudget = previewId ? PREVIEW_TIMEOUT_MS : ANTIFLICKER_TIMEOUT_MS;
+  const totalBudget = previewId ? PREVIEW_TOTAL_MS : ANTIFLICKER_TOTAL_MS;
+  setTimeout(() => reveal("network-timeout"), networkBudget);
+  setTimeout(() => reveal("total-timeout"), totalBudget);
 
   const id = identify();
   state.visitorId = id.visitorId;
@@ -285,7 +307,10 @@ function run(m: Manifest, visitorId: string): void {
 
   // A repeat visit inside the cache window needs no network at all, which is
   // what makes the second pageview reliably flicker-free on a slow connection.
-  const cached = readCachedManifest<Manifest>(MANIFEST_MAX_AGE_S * 1000);
+  // Never in preview: the cache holds the *live* manifest, and serving it here
+  // would silently show the running experiment while the screen claims to be
+  // showing the draft.
+  const cached = previewId ? null : readCachedManifest<Manifest>(MANIFEST_MAX_AGE_S * 1000);
   if (cached) {
     manifest = cached;
     state.manifestSource = "cache";
@@ -296,15 +321,24 @@ function run(m: Manifest, visitorId: string): void {
   // Served from the CDN edge, not the API origin: a cache hit here is the
   // difference between ~30ms and ~500ms on a throttled connection, and the
   // network budget above is only 300ms.
-  const url = __GX_CDN__ + "/manifest?site=" + encodeURIComponent(siteId) +
+  let url = __GX_CDN__ + "/manifest?site=" + encodeURIComponent(siteId) +
     "&path=" + encodeURIComponent(location.pathname);
+
+  // ?gx_preview=<experimentId> renders a draft for review. It goes to the API
+  // directly rather than the CDN, because a preview must never be edge-cached
+  // and served to somebody else.
+  if (previewId) {
+    url = __GX_API__ + "/manifest?site=" + encodeURIComponent(siteId) +
+      "&path=" + encodeURIComponent(location.pathname) +
+      "&preview=" + encodeURIComponent(previewId);
+  }
 
   fetch(url, { credentials: "omit", mode: "cors" })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error("manifest " + r.status))))
     .then((m: Manifest) => {
       manifest = m;
       state.manifestSource = "network";
-      writeCachedManifest(m);
+      if (!previewId) writeCachedManifest(m);
       run(m, id.visitorId);
     })
     .catch(() => {
