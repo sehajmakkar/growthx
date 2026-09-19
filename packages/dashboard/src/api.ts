@@ -33,6 +33,22 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
   return res.json() as Promise<T>;
 }
 
+async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const url = new URL(BASE + path);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ site: SITE, ...body }),
+  });
+  const payload = await res.json();
+  // A 403 here is the policy refusing, which is a real answer rather than a
+  // failure — the caller renders it. Only unexpected statuses throw.
+  if (!res.ok && res.status !== 403 && res.status !== 422) {
+    throw new Error(`${path} returned ${res.status}`);
+  }
+  return payload as T;
+}
+
 export interface Point { x: number; y: number; weight: number; type: string; selector: string }
 export interface Summary {
   sessions: number; pageviews: number; clicks: number;
@@ -79,8 +95,37 @@ export interface PolicyDoc {
   decisions: PolicyDecisionRow[];
 }
 
+export interface ApprovalVariant {
+  id: string; label: string; is_control: boolean;
+  rationale: string; mutations: { op: string; selector: string; value?: string; note?: string }[];
+}
+export interface Approval {
+  id: string;
+  experiment_id: string;
+  action: string;
+  status: "pending" | "approved" | "rejected" | "expired";
+  cedar_decision: { policyId: string | null; explain: string; reasons: string[] } | null;
+  requested_at: string;
+  requested_by: string;
+  decided_at: string | null;
+  decided_by: string | null;
+  rejection_reason: string | null;
+  hypothesis: string;
+  path: string;
+  experiment_status: string;
+  variants: ApprovalVariant[];
+}
+
 export const api = {
   policy: () => get<PolicyDoc>("/api/policy"),
+  approvals: () => get<{ approvals: Approval[] }>("/api/approvals"),
+  decide: (body: { approvalId: string; decision: "approve" | "reject"; decidedBy: string; reason?: string }) =>
+    post<{ ok: boolean; errors?: string[] }>("/api/approvals", body),
+  launch: (experimentId: string) =>
+    post<{ launched: boolean; policyId?: string; explain?: string; approvalId?: string; errors?: string[] }>(
+      "/api/experiments/launch", { experimentId }),
+  stop: (experimentId: string) =>
+    post<{ ok: boolean; errors?: string[] }>("/api/experiments/stop", { experimentId }),
   experiments: () => get<{ experiments: Experiment[] }>("/api/experiments"),
   learnings: () => get<{ learnings: Learning[] }>("/api/learnings"),
   opportunities: () => get<{ opportunities: Opportunity[] }>("/api/opportunities"),

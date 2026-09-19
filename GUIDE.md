@@ -37,6 +37,7 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P13** — Opportunities with verified evidence | passed Sat 19 Sept |
 | ▶ | **P14** — Hypothesis + learning memory (1h) | next |
 | ✅ | P10–P16 — dashboard, heatmaps, agent, variant diff | passed Sat 19 Sept |
+| ✅ | P17, P19 — policy gate, approval queue | passed Sat 19 Sept |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
 
@@ -1948,6 +1949,80 @@ every request over HTTPS to the real Lambda rather than calling the function.
 > Re-running `capture:snapshot` is required after this phase. `protected` and
 > `region` are now part of the snapshot's content hash, so the first run after
 > upgrading stores a new version even though no visible text changed.
+
+---
+
+### P19 — Approval queue and lifecycle  [status: ✅ passed Sat 19 Sept]
+
+**What it adds.** The **Approvals** screen, and the transitions behind it:
+`draft → pending_approval → running`, with `rejected` and `killed` as explicit
+states rather than error paths.
+
+**The idea worth keeping hold of.** The queue is not a workflow sitting beside
+the policy — it is *produced by* it. When the agent tries to launch, Cedar
+refuses with `forbid-launch-without-approval`, and that refusal becomes the
+request, carrying the decision that created it. Each card shows the refusal
+verbatim at the top.
+
+**Verify it.**
+
+```bash
+pnpm check:approvals
+```
+
+Ends with `Nothing reaches a visitor without a human name on it.`
+
+| Check | Why it is there |
+|---|---|
+| The refusal creates a pending request | the queue and the policy are the same mechanism |
+| Retrying does not pile up duplicates | the agent retries within a run; the human should see one card |
+| **A pricing refusal never enters the queue** | an Approve button that cannot work would misrepresent what the button does |
+| Rejecting without a reason is refused | the reason is read back to the agent |
+| Approving without a name is refused | an approval with nobody attached is not an approval |
+| Approving re-runs the *whole* policy | something else may have started running in between. A queue that bypassed the gate on the way out would be a gate with a hole shaped like the button a human clicks |
+| The launch records who permitted it | read from the `approvals` table, never from the request body |
+
+**Both branches, by hand.** Open **Approvals**:
+
+- **Approve and launch** → the card reports it launched, and the challenger is
+  live on Site A within 30s (the manifest edge cache is the bound).
+- **Reject** → you must type a reason. The experiment becomes `rejected` rather
+  than being deleted, and the reason appears at `/api/feedback`, which the
+  agent's `get_rejection_feedback` tool reads before it proposes anything next.
+
+**Recording shot 7.** Approving consumes the pending card, so the take cannot be
+repeated as filmed. Put it back with:
+
+```bash
+pnpm demo:queue
+```
+
+This resets the experiment and asks the API to launch again, so the policy
+refuses and produces a fresh request — created the way it would be in real use,
+not inserted by hand. Safe to re-run between takes.
+
+**The kill switch.**
+
+```bash
+curl -X POST "$GX_API_BASE/api/experiments/stop" \
+  -H 'content-type: application/json' \
+  -d "{\"site\":\"$GX_SITE_ID\",\"experimentId\":\"<id>\"}"
+```
+
+Sets `killed`, not `concluded` — an experiment somebody pulled and one that ran
+its course are different facts, and P20 must never write a learning from the
+first.
+
+| You see | What it means | Fix |
+|---|---|---|
+| `invalid input value for enum experiment_status` | a status was used that is not in the enum (`draft`, `pending_approval`, `rejected`, `running`, `stopping`, `concluded`, `killed`) | use one of those |
+| Approved, "but the policy still refuses" | correct behaviour — something else started running on that page in the meantime | kill the other experiment, approve again |
+| The queue is empty after an agent run | the launch was refused for a reason no human can lift; check **Policy** | look at the newest refusal |
+
+> **Deferred from this phase.** PLAN §P19 step 1 also lists an EventBridge tick
+> Lambda driving `running → evaluate → conclude`. It is deferred to P20, where
+> the evaluator it would call actually exists — a scheduled tick with nothing to
+> invoke would be theatre. Step 2 (Step Functions) stays cut per §3.3.
 
 ---
 

@@ -210,6 +210,26 @@ def get_experiment_history() -> str:
     )
 
 
+@tool
+def get_rejection_feedback() -> str:
+    """Why a human turned down your previous proposals.
+
+    Call this before propose_experiment, together with get_experiment_history.
+    A rejection is not a dead end: it names something about the proposal a
+    person was not willing to put in front of visitors. Read the reasons and do
+    not repeat the same shape of change.
+    """
+    d = _get("/api/feedback")
+    items = d.get("rejections", []) if isinstance(d, dict) else []
+    if not items:
+        return "No proposals have been rejected. Nothing to avoid yet."
+    return "\n".join(
+        f"- REJECTED by {r.get('decided_by')}: {r.get('rejection_reason')}\n"
+        f"    (the proposal was: {str(r.get('hypothesis'))[:140]})"
+        for r in items
+    )
+
+
 def _post(endpoint: str, body: dict[str, Any]) -> Any:
     _calls["n"] += 1
     if _calls["n"] > _MAX_CALLS:

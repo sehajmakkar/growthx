@@ -3,6 +3,7 @@ import type { Db } from "@growthx/db";
 import { newId } from "@growthx/shared/runtime";
 import { validateMutations } from "@growthx/shared";
 import { gate, describeTargets, refusal, type Mutation, type OutlineElement } from "./gate.js";
+import { requestApproval } from "./approvals.js";
 
 /**
  * Proposing an experiment.
@@ -232,7 +233,20 @@ export async function launchExperiment(
     context: { approvedBy: approval ? String(approval.decided_by ?? "") : "" },
   }, { runId: input.runId ?? null });
 
-  if (decision.decision === "deny") return { launched: false, ...refusal(decision) };
+  if (decision.decision === "deny") {
+    // The refusal *is* the request for approval — but only when a human could
+    // actually lift it. A launch refused for touching pricing is never queued;
+    // offering someone an Approve button that cannot work would misrepresent
+    // what the button does.
+    const requested = await requestApproval(db, siteId, input.experimentId, decision);
+    return {
+      launched: false,
+      ...refusal(decision),
+      approvalId: requested?.approvalId ?? null,
+      approvalRequested: requested?.created ?? false,
+      awaitingApproval: requested !== null,
+    };
+  }
 
   await db.execute(sql`
     update experiments set status = 'running', started_at = now()
