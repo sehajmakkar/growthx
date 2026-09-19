@@ -45,6 +45,14 @@ export function Experiments() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="font-mono text-xs text-muted">{e.id}</span>
                   <div className="flex items-center gap-3">
+                    {/* Only once it has ended: a "Results" link on a draft
+                        invites reading a rate off an experiment that has not run. */}
+                    {(e.status === "concluded" || e.status === "running") && (
+                      <Link to={`/experiments/${e.id}/results`}
+                            className="text-[0.75rem] font-medium text-accent hover:underline">
+                        Results →
+                      </Link>
+                    )}
                     <Link to={`/experiments/${e.id}/diff`}
                           className="text-[0.75rem] font-medium text-accent hover:underline">
                       Compare side by side →

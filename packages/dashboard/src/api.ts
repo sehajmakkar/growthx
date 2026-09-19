@@ -116,8 +116,35 @@ export interface Approval {
   variants: ApprovalVariant[];
 }
 
+export interface ArmResult {
+  variantId: string; label: string; isControl: boolean;
+  exposed: number; converted: number; rate: number;
+  ci: { lo: number; hi: number };
+  frictionSessions: number; frictionRate: number;
+  diff: { point: number; lo: number; hi: number; p: number | null } | null;
+}
+export interface ExperimentResults {
+  experimentId: string; path: string; hypothesis: string; status: string;
+  startedAt: string | null; concludedAt: string | null;
+  learningId: string | null; opportunityId: string | null;
+  arms: ArmResult[];
+  segments: { segment: string; underpowered: boolean;
+              arms: { variantId: string; exposed: number; converted: number; rate: number }[] }[];
+  divergence: { opposed: boolean; allUnderpowered: boolean;
+                deltas: { segment: string; delta: number; exposed: number; underpowered: boolean }[] };
+  guardrail: { metric: string; note: string; controlRate: number;
+               tolerance: number; breached: boolean; breachedBy: string[] };
+  decision: "not_yet_decisive" | "no_difference" | "challenger_won" | "control_won" | "guardrail_breach";
+  decisionReason: string;
+  minSessionsPerArm: number;
+  requiredPerArm: number | null;
+  totalExposed: number;
+  text: string;
+}
+
 export const api = {
   policy: () => get<PolicyDoc>("/api/policy"),
+  results: (experimentId: string) => get<ExperimentResults>("/api/results", { experimentId }),
   approvals: () => get<{ approvals: Approval[] }>("/api/approvals"),
   decide: (body: { approvalId: string; decision: "approve" | "reject"; decidedBy: string; reason?: string }) =>
     post<{ ok: boolean; errors?: string[] }>("/api/approvals", body),

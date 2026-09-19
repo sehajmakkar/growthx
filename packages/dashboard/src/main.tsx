@@ -12,6 +12,7 @@ import { Learnings } from "./routes/Learnings.js";
 import { Diff } from "./routes/Diff.js";
 import { Policy } from "./routes/Policy.js";
 import { Approvals } from "./routes/Approvals.js";
+import { Results } from "./routes/Results.js";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -24,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="opportunities" element={<Opportunities />} />
           <Route path="experiments" element={<Experiments />} />
           <Route path="experiments/:experimentId/diff" element={<Diff />} />
+          <Route path="experiments/:experimentId/results" element={<Results />} />
           <Route path="diff" element={<Diff />} />
           <Route path="approvals" element={<Approvals />} />
           <Route path="policy" element={<Policy />} />
