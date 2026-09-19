@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P11 complete — heatmap overlay live. Fri 19 Sept.
+**Last updated:** P12 complete — the agent runs and reasons. Sat 20 Sept.
 
 ### Phases
 
@@ -33,7 +33,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P9** — Screenshots + session digests | passed Fri 19 Sept |
 | ✅ | **P10** — Dashboard scaffold + design system | passed Fri 19 Sept |
 | ✅ | **P11** — ★ Heatmap overlay | passed Fri 19 Sept |
-| ▶ | **P12** — Agent skeleton (1.5h) | next |
+| ✅ | **P12** — Agent skeleton | passed Sat 20 Sept |
+| ▶ | **P13** — Analyst → opportunities (1.5h) | next |
 | ⬜ | P10–P16 — Friday: dashboard, heatmaps, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
@@ -1649,6 +1650,86 @@ The reference has a **Move** map and Location / Browser / OS filters. We never
 recorded mousemove, and we do not collect geo or user-agent breakdowns — adding
 them now means new event types and re-running everything downstream. Four filters
 that work beat seven where three are decorative, particularly if a judge clicks one.
+
+---
+
+### P12 — Agent skeleton  [status: ✅ passed Sat 20 Sept]
+
+#### What this phase should have made true
+
+A Strands agent holds the objective, calls real tools, and its every step is
+recorded where you can inspect it.
+
+#### Run this
+
+```bash
+pnpm agent:run
+source .env.local && open "$GX_DASHBOARD_URL/runs"
+```
+
+#### You should see
+
+A diagnosis in about 40 seconds over roughly 15 tool calls, and every figure in
+it traceable to a tool result in the run log. The last run produced:
+
+```
+FINDING: losing signups primarily on mobile due to fold-and-scroll drop-off,
+alongside broken interaction controls in the pricing section.
+
+EVIDENCE:
+  6.8% conversion on device=mobile (12/176) vs 31.9% on device=desktop (46/144)
+  22.2% reach 75% depth on mobile vs 95.1% on desktop
+  15.1% saw div.tier-expand when bounced vs 94.8% when converted
+  251 dead clicks and 55 rage clicks on div.tier-expand
+```
+
+**Check the arithmetic yourself.** 12/176 is 6.8%, 46/144 is 31.9%, and both
+appear verbatim in the run log's funnel steps. The agent is quoting, not
+inventing — which is the only reason the evidence trail means anything.
+
+#### The rule that makes this work
+
+**The agent may quote figures, never calculate them.** Every number was computed
+in SQL and handed over by a tool. If a statistic were produced inside the model's
+context, nothing in the evidence trail could be checked.
+
+Tools return a dozen ranked lines rather than raw JSON. Handing back a 20KB
+payload per call fills the context with data the model cannot act on.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| `got multiple values for argument 'path'` | a tool's own argument collides with the HTTP helper's first parameter | code |
+| Dozens of repeated tool calls, no conclusion | a tool is raising and the model is retrying; look at the *first* error, not the last | code |
+| `exceeded your current quota` | free-tier daily limit on that model; the chain spills to the next | environment, self-healing |
+| `503 high demand` | that model is at capacity for large prompts; the chain spills | environment, self-healing |
+| Wall of `Event loop is closed` tracebacks | the Gemini client tearing down after the loop has gone. Noise at exit, nothing leaked | neither |
+
+#### Three failures worth recording
+
+This phase took four attempts, and the diagnoses I gave for the first two were
+wrong. Recorded because the reasoning error is instructive:
+
+1. **27 tool calls, only the zero-argument tool worked.** I concluded Gemini was
+   rejecting `"default"` keys in the tool schema and removed them. Plausible, and
+   wrong.
+2. **118 tool calls.** I concluded the 20KB JSON payloads were overflowing
+   context and made the tools return compact summaries. Also a real improvement,
+   also not the cause.
+3. **The actual bug**: `_get(path, **params)` took `path` as its first parameter,
+   and every tool called `_get("/api/heatmap", …, path=path)` — passing `path`
+   twice. Every parameterised tool raised `TypeError` before any request was
+   made. The agent saw a tool error and retried.
+
+The tell was visible from the first run and I misread it: `get_experiment_history`
+worked because it is the only tool that **does not pass a path**, not because it
+takes no arguments. Calling the tool functions directly found it in seconds —
+which is what I should have done before theorising about the framework.
+
+**The lesson: test your own function in isolation before blaming the layer above
+it.** The two "fixes" were improvements, but shipping them as explanations cost
+most of a day's model quota.
 
 ---
 

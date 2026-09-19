@@ -5,6 +5,7 @@ import { Shell } from "./components/Shell.js";
 import { Overview } from "./routes/Overview.js";
 import { Heatmaps } from "./routes/Heatmaps.js";
 import { Placeholder } from "./routes/Placeholder.js";
+import { Runs } from "./routes/Runs.js";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -39,11 +40,7 @@ createRoot(document.getElementById("root")!).render(
               subtitle="What was observed, the diagnosed cause in plain language, and the evidence."
               body="A report you could act on without ever launching our test: what the agent saw, why it thinks the page underperforms, the figures behind that, and what it proposes to do."
               phase="P20" />} />
-          <Route path="runs" element={
-            <Placeholder title="Run log"
-              subtitle="Every step the agent took, and how long each one cost."
-              body="Which sub-agent ran, which tool it called, what came back, which Cedar decision gated it, and the model and token cost. This is how you check the agent's reasoning rather than trusting it."
-              phase="P12" />} />
+          <Route path="runs" element={<Runs />} />
           <Route path="*" element={
             <Placeholder title="Not found" subtitle="" body="That page does not exist." />} />
         </Route>

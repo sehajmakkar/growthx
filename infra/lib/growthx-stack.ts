@@ -187,18 +187,21 @@ export class GrowthxStack extends Stack {
     });
     grantSecrets(dashboardApi);
 
-    for (const route of ["/api/heatmap", "/api/funnel", "/api/digests", "/api/points", "/api/summary"]) {
+    for (const route of ["/api/heatmap", "/api/funnel", "/api/digests", "/api/points",
+                         "/api/summary", "/api/snapshot", "/api/learnings", "/api/runs"]) {
       api.addRoutes({
         path: route,
         methods: [apigw.HttpMethod.GET],
         integration: new integrations.HttpLambdaIntegration(`Dash${route.replace(/\W/g, "")}`, dashboardApi),
       });
     }
-    api.addRoutes({
-      path: "/api/aggregate",
-      methods: [apigw.HttpMethod.POST],
-      integration: new integrations.HttpLambdaIntegration("DashAggregate", dashboardApi),
-    });
+    for (const [route, id] of [["/api/aggregate", "DashAggregate"], ["/api/runs", "DashRunsPost"]] as const) {
+      api.addRoutes({
+        path: route,
+        methods: [apigw.HttpMethod.POST],
+        integration: new integrations.HttpLambdaIntegration(id, dashboardApi),
+      });
+    }
 
     api.addRoutes({
       path: "/manifest",

@@ -1,5 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
-import { getDb } from "@growthx/db";
+import { getDb, sql } from "@growthx/db";
 import { segmentKey } from "@growthx/shared/runtime";
 import { getHeatmap, funnel, computeAll, heatmapPoints, pageSummary } from "../aggregate.js";
 import { getSessionDigest } from "../digests.js";
@@ -30,6 +30,40 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (route.endsWith("/heatmap")) {
       return json(200, await getHeatmap(db, siteId, path, segment));
+    }
+    // The agent's run log. Written by the agent, read by the dashboard, so a
+    // human can check the reasoning against what the agent was actually shown.
+    if (route.endsWith("/runs") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      await db.execute(sql`
+        insert into runs (id, site_id, trigger, status, steps, error, finished_at)
+        values (${body.id}, ${body.siteId ?? siteId}, ${body.trigger ?? "manual"},
+                ${body.status ?? "running"}, ${JSON.stringify(body.steps ?? [])}::jsonb,
+                ${body.error ?? null},
+                ${body.finishedAt ? new Date(body.finishedAt * 1000) : null})
+        on conflict (id) do update set
+          status = excluded.status, steps = excluded.steps,
+          error = excluded.error, finished_at = excluded.finished_at
+      `);
+      return json(200, { ok: true, id: body.id });
+    }
+    if (route.endsWith("/runs")) {
+      const res = await db.execute(sql`
+        select id, trigger, status, steps, error, started_at, finished_at
+        from runs where site_id = ${siteId} order by started_at desc limit 20`);
+      return json(200, { runs: res.rows ?? [] });
+    }
+    if (route.endsWith("/snapshot")) {
+      const res = await db.execute(sql`
+        select path, viewport, elements, content_hash from snapshots
+        where site_id = ${siteId} and path = ${path} and is_current = true limit 1`);
+      return json(200, (res.rows ?? [])[0] ?? { error: "no snapshot" });
+    }
+    if (route.endsWith("/learnings")) {
+      const res = await db.execute(sql`
+        select id, hypothesis, generalisation, segment, outcome, tags, confidence, created_at
+        from learnings where site_id = ${siteId} order by created_at desc limit 50`);
+      return json(200, { learnings: res.rows ?? [] });
     }
     if (route.endsWith("/points")) {
       const mode = (q.mode === "attention" ? "attention" : "clicks") as "clicks" | "attention";

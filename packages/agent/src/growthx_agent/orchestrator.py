@@ -1,0 +1,141 @@
+"""The Growth Orchestrator.
+
+One agent holds the objective and the guardrail. It is the only component with a
+goal; everything else is a tool it may call. That is the product's whole premise:
+the user does not ask for a variant, they state an outcome and a constraint, and
+the agent decides what to look at.
+
+Deterministic work stays out of the model (PLAN §2.2). Every figure the agent
+cites was computed in SQL and handed to it by a tool — it may quote, never
+calculate.
+"""
+from __future__ import annotations
+
+import logging
+import sys
+import time
+import warnings
+
+# The Gemini client closes its async transport after the loop has gone, which
+# produces a wall of "Event loop is closed" tracebacks that bury the actual
+# result. Nothing is leaked; it is noise at exit.
+logging.getLogger("asyncio").setLevel(logging.CRITICAL)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+from strands import Agent
+
+from . import run_log
+from .config import MAX_ITERATIONS, MODEL_CHAIN, WALL_CLOCK_S
+from .model import build_model
+from .tools import (
+    ToolBudgetExceeded,
+    reset_budget,
+    get_experiment_history,
+    get_funnel,
+    get_heatmap,
+    get_page_dom,
+    get_session_digest,
+)
+
+SYSTEM_PROMPT = """You are the growth engineer for a website. You hold one objective and one guardrail.
+
+OBJECTIVE: increase signup conversion from 3% to 4%.
+GUARDRAIL: lead quality must not fall below 95% of baseline. You may never trade
+this away for conversions.
+
+You are looking at a single-page site. Your job right now is to work out **where
+the objective is leaking and why**, using the tools available.
+
+How to work:
+
+1. Start broad, then narrow. Compare segments against each other — a number is
+   only interesting relative to another number.
+2. Every claim you make must come from a tool result. Quote the figure and say
+   which segment it came from. If you cannot source a number, do not state it.
+3. Distinguish "they never saw it" from "they saw it and did nothing". These have
+   completely different remedies and the data can tell them apart. Check the
+   funnel before claiming either: if cta_viewed equals arrived, then everyone
+   saw it and the problem is not visibility, however far down the page it sits.
+   Being below the fold and being unseen are not the same thing.
+4. Check the session digests: they describe how groups behaved, not just totals.
+5. Do not propose a fix yet. Diagnose first.
+
+Finish with a short summary in this shape:
+
+FINDING: one sentence naming the problem.
+EVIDENCE: three or four bullet points, each a figure and the segment it came from.
+LIKELY CAUSE: one or two sentences in plain language, as you would say it to a
+marketer who has not seen the data.
+"""
+
+
+_TRANSIENT = (
+    "429", "503", "resource_exhausted", "unavailable",
+    "quota", "exceeded", "rate limit", "high demand", "try again",
+)
+
+
+def _is_transient(message: str) -> bool:
+    lowered = message.lower()
+    return any(marker in lowered for marker in _TRANSIENT)
+
+
+def run(trigger: str = "manual") -> int:
+    reset_budget()
+    run_id = run_log.start_run(trigger)
+    print(f"▸ run {run_id}")
+    started = time.time()
+
+    tools = [get_heatmap, get_funnel, get_session_digest, get_page_dom,
+             get_experiment_history]
+
+    last_error: Exception | None = None
+    for attempt in range(len(MODEL_CHAIN)):
+        model, name = build_model(attempt)
+        print(f"  model {name}")
+        try:
+            agent = Agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT)
+            result = agent(
+                "Diagnose where this page is losing signups. Compare mobile "
+                "against desktop, and compare visitors who converted against "
+                "those who bounced."
+            )
+            elapsed = time.time() - started
+            text = str(result)
+            run_log.record_model(name, len(SYSTEM_PROMPT), len(text), int(elapsed * 1000))
+            run_log.finish_run("succeeded")
+
+            print(f"\n{text}\n")
+            print(f"▸ {len(run_log.steps())} steps in {elapsed:.1f}s")
+            for step in run_log.steps():
+                mark = "✗" if step.get("error") else "✓"
+                print(f"  {mark} {step['tool']:<18} {step.get('summary', '')[:78]}")
+            return 0
+        except ToolBudgetExceeded as exc:
+            # A budget stop is a real answer: the agent went round in circles.
+            run_log.finish_run("failed", str(exc))
+            print(f"✗ stopped after {len(run_log.steps())} tool calls: {exc}")
+            return 1
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            message = str(exc)
+            print(f"  {name} failed: {message[:140]}")
+            if time.time() - started > WALL_CLOCK_S:
+                break
+            # Quota and capacity are per model, so both are answered by moving
+            # down the chain. Match on the human-readable text as well as the
+            # status codes: the SDK surfaces the prose, not the code, and
+            # matching only on "429" meant spillover never fired at all.
+            if not _is_transient(message):
+                break
+            # A per-minute quota clears quickly; give it a moment before the
+            # next model so a three-model chain is not spent in three seconds.
+            time.sleep(2)
+
+    run_log.finish_run("failed", str(last_error) if last_error else "unknown")
+    print(f"✗ run failed: {last_error}")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(run(sys.argv[1] if len(sys.argv) > 1 else "manual"))
