@@ -3,6 +3,7 @@ import { getDb, sql } from "@growthx/db";
 import { segmentKey } from "@growthx/shared/runtime";
 import { getHeatmap, funnel, computeAll, heatmapPoints, pageSummary } from "../aggregate.js";
 import { getSessionDigest } from "../digests.js";
+import { createOpportunity, listOpportunities } from "../opportunities.js";
 import { requireSecret } from "../secrets.js";
 import { json, badRequest, serverError } from "../http.js";
 
@@ -64,6 +65,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         select id, hypothesis, generalisation, segment, outcome, tags, confidence, created_at
         from learnings where site_id = ${siteId} order by created_at desc limit 50`);
       return json(200, { learnings: res.rows ?? [] });
+    }
+    if (route.endsWith("/opportunities") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      const result = await createOpportunity(db, siteId, path, body);
+      // 422 rather than 400: the request was well-formed, its claims were not
+      // supported. The agent reads these errors and retries with real figures.
+      return json(result.stored ? 200 : 422, result);
+    }
+    if (route.endsWith("/opportunities")) {
+      return json(200, { opportunities: await listOpportunities(db, siteId) });
     }
     if (route.endsWith("/points")) {
       const mode = (q.mode === "attention" ? "attention" : "clicks") as "clicks" | "attention";

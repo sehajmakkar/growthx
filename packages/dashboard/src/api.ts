@@ -45,7 +45,13 @@ export interface Run {
   started_at: string; finished_at: string | null;
 }
 
+export interface Opportunity {
+  id: string; title: string; body: string; confidence: string;
+  segment_key: string; status: string; evidence: Record<string, unknown>[];
+}
+
 export const api = {
+  opportunities: () => get<{ opportunities: Opportunity[] }>("/api/opportunities"),
   runs: () => get<{ runs: Run[] }>("/api/runs"),
   points: (segment: string, mode: "clicks" | "attention", path = "/") =>
     get<{ mode: string; points: Point[] }>("/api/points", { segment, mode, path }),

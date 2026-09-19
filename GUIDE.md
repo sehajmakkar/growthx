@@ -15,7 +15,7 @@ ten times more at 2am on Saturday than it does now.
 
 ## §A — State
 
-**Last updated:** P12 complete — the agent runs and reasons. Sat 20 Sept.
+**Last updated:** P13 complete — opportunities with verified evidence. Sat 19 Sept.
 
 ### Phases
 
@@ -34,7 +34,8 @@ ten times more at 2am on Saturday than it does now.
 | ✅ | **P10** — Dashboard scaffold + design system | passed Fri 19 Sept |
 | ✅ | **P11** — ★ Heatmap overlay | passed Fri 19 Sept |
 | ✅ | **P12** — Agent skeleton | passed Sat 20 Sept |
-| ▶ | **P13** — Analyst → opportunities (1.5h) | next |
+| ✅ | **P13** — Opportunities with verified evidence | passed Sat 19 Sept |
+| ▶ | **P14** — Hypothesis + learning memory (1h) | next |
 | ⬜ | P10–P16 — Friday: dashboard, heatmaps, agent | |
 | ⬜ | P17–P21 — Saturday: governance, results, polish | |
 | ⬜ | P22–P23 — Saturday: rehearse, record, submit | |
@@ -1730,6 +1731,77 @@ which is what I should have done before theorising about the framework.
 **The lesson: test your own function in isolation before blaming the layer above
 it.** The two "fixes" were improvements, but shipping them as explanations cost
 most of a day's model quota.
+
+---
+
+### P13 — Opportunities with verified evidence  [status: ✅ passed Sat 19 Sept]
+
+#### What this phase should have made true
+
+The agent records what it found, and **every figure is checked against the
+database before the opportunity is accepted**.
+
+#### Run this
+
+```bash
+pnpm agent:run
+source .env.local && open "$GX_DASHBOARD_URL/opportunities"
+```
+
+Click "Show evidence" on an opportunity.
+
+#### You should see
+
+An opportunity, and a table with two numeric columns: what the agent **cited**
+and what is **in the data**. They match, because one that does not match is never
+written.
+
+```
+Mobile conversion is significantly lower than desktop due to poor engagement
+and scroll depth.
+
+mobile_conv        12     12     funnel:device=mobile:converted
+desktop_conv       46     46     funnel:device=desktop:converted
+mobile_scroll_50   43.8   43.8   scroll:device=mobile:50
+desktop_scroll_50  100    100    scroll:device=desktop:50
+```
+
+#### The enforcement is real, and you can watch it work
+
+Each evidence item carries a `sourceRef` — `heatmap:<segment>:<selector>:<field>`,
+`funnel:<segment>:<step>`, `scroll:<segment>:<depth>` or `digest:<signature>`.
+The API resolves it against the stored aggregate and compares the cited value.
+A mismatch returns **422** naming the failing citation, and the agent must
+correct it and try again.
+
+In the run that produced the opportunity above, **six attempts were rejected
+first**:
+
+```
+funnel:device=mobile:converted   says 0.068, data says 12     ← cited a rate where the funnel holds a count
+scroll:device=mobile:50          says 0.438, data says 43.8   ← cited a fraction where the data is a percentage
+heatmap:…:div.tier-expand        says 63, data says …         ← wrong figure
+```
+
+A model merely *asked* to cite sources will cite plausible ones. This rejects
+them. That is the whole difference between an evidence trail and prose with
+numbers in it.
+
+#### Failure looks like
+
+| Symptom | Cause | Whose problem |
+|---|---|---|
+| `only N of M evidence items resolve` | fewer than three citations matched; the agent should retry with exact figures | working as designed |
+| Every attempt rejected, none stored | the agent is restating rates instead of quoting tool output; tighten the prompt | code |
+| `no aggregate for segment "…"` | that segment has not been computed — run `pnpm aggregate` | environment |
+| `exceeded your current quota … retry in Ns` | free tier is ~20 requests per minute **per model**; the loop now waits it out | environment, self-healing |
+
+#### Known limitation
+
+The last run recorded **one** opportunity rather than the two or three requested.
+It spent its tool budget gathering and then correcting rejected citations. One
+well-evidenced opportunity demonstrates the mechanism; with quota at ~20
+requests per minute per model, chasing a second was not worth the calls.
 
 ---
 

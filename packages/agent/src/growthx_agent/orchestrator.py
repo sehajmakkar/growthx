@@ -12,6 +12,7 @@ calculate.
 from __future__ import annotations
 
 import logging
+import re
 import sys
 import time
 import warnings
@@ -29,6 +30,7 @@ from .config import MAX_ITERATIONS, MODEL_CHAIN, WALL_CLOCK_S
 from .model import build_model
 from .tools import (
     ToolBudgetExceeded,
+    record_opportunity,
     reset_budget,
     get_experiment_history,
     get_funnel,
@@ -48,6 +50,11 @@ the objective is leaking and why**, using the tools available.
 
 How to work:
 
+You have a limited number of tool calls, so be economical. Four segments is
+enough to find the problem: device=mobile, device=desktop, outcome=bounced and
+outcome=converted. Do not enumerate every combination before deciding anything —
+gather what you need, then record what you found.
+
 1. Start broad, then narrow. Compare segments against each other — a number is
    only interesting relative to another number.
 2. Every claim you make must come from a tool result. Quote the figure and say
@@ -60,10 +67,19 @@ How to work:
 4. Check the session digests: they describe how groups behaved, not just totals.
 5. Do not propose a fix yet. Diagnose first.
 
-Finish with a short summary in this shape:
+When you have found something, call `record_opportunity`. Every figure you cite
+is checked against the stored data before it is accepted — if a number does not
+match, you will be told which citation failed and you should correct it and try
+again rather than softening the claim.
 
-FINDING: one sentence naming the problem.
-EVIDENCE: three or four bullet points, each a figure and the segment it came from.
+Record **two or three** distinct opportunities, strongest first. Do this as soon
+as you have enough to support one — do not keep gathering. A good one names
+a specific element or segment and quantifies the gap. A weak one restates a
+general principle.
+
+Then finish with:
+
+FINDING: one sentence naming the single biggest problem.
 LIKELY CAUSE: one or two sentences in plain language, as you would say it to a
 marketer who has not seen the data.
 """
@@ -87,18 +103,28 @@ def run(trigger: str = "manual") -> int:
     started = time.time()
 
     tools = [get_heatmap, get_funnel, get_session_digest, get_page_dom,
-             get_experiment_history]
+             get_experiment_history, record_opportunity]
+
+    def _retry_after(message: str) -> float:
+        """Gemini says how long to wait. The free-tier limit is per minute, not
+        per day, so waiting is usually the right answer — giving up on a 36
+        second pause wastes a run that would have succeeded."""
+        match = re.search(r"retry in ([\d.]+)s", message)
+        return min(75.0, float(match.group(1)) + 3) if match else 0.0
 
     last_error: Exception | None = None
-    for attempt in range(len(MODEL_CHAIN)):
-        model, name = build_model(attempt)
+    # Two passes over the chain: the first spills across models, the second
+    # waits out a per-minute window if every model is rate-limited at once.
+    for attempt in range(len(MODEL_CHAIN) * 2):
+        model, name = build_model(attempt % len(MODEL_CHAIN))
         print(f"  model {name}")
         try:
             agent = Agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT)
             result = agent(
                 "Diagnose where this page is losing signups. Compare mobile "
-                "against desktop, and compare visitors who converted against "
-                "those who bounced."
+                "against desktop, and converted visitors against bounced ones. "
+                "Then record the two or three strongest opportunities you find, "
+                "citing exact figures from the tools."
             )
             elapsed = time.time() - started
             text = str(result)
@@ -128,9 +154,14 @@ def run(trigger: str = "manual") -> int:
             # matching only on "429" meant spillover never fired at all.
             if not _is_transient(message):
                 break
-            # A per-minute quota clears quickly; give it a moment before the
-            # next model so a three-model chain is not spent in three seconds.
-            time.sleep(2)
+            wait = _retry_after(message)
+            if attempt >= len(MODEL_CHAIN) - 1 and wait:
+                print(f"  every model rate-limited; waiting {wait:.0f}s")
+                time.sleep(wait)
+            else:
+                # A per-minute quota clears quickly; pause briefly before the
+                # next model so the chain is not spent in three seconds.
+                time.sleep(2)
 
     run_log.finish_run("failed", str(last_error) if last_error else "unknown")
     print(f"✗ run failed: {last_error}")
