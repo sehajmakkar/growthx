@@ -337,7 +337,41 @@ export const approvals = pgTable(
   (t) => [index("approvals_status_idx").on(t.status, t.requestedAt)]
 );
 
-// ── reports ──────────────────────────────────────────────────────────────────
+// ── policy decisions — every Cedar evaluation, allows and denials alike ──────
+
+/**
+ * Written before the action happens, whichever way the decision goes.
+ *
+ * Denials are the reason this table exists. A refused action writes nothing
+ * anywhere else — no experiment row, no approval — so without this the most
+ * important thing the gate does would leave no trace at all, and "the agent is
+ * governed" would be a claim rather than a record.
+ */
+export const policyDecisions = pgTable(
+  "policy_decisions",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id").notNull(),
+    principal: text("principal").notNull().default("agent:growth-orchestrator"),
+    action: text("action").notNull(),
+    resource: text("resource").notNull(),
+    decision: text("decision").notNull(),
+    /** The @id from policies/growthx.cedar that decided it. */
+    policyId: text("policy_id"),
+    reasons: jsonb("reasons").notNull().default([]),
+    /** Sentence shown in the dashboard next to the decision. */
+    explain: text("explain").notNull().default(""),
+    /** The attributes Cedar actually saw — the audit is worthless if you
+     *  cannot tell what the engine was told. */
+    resourceAttrs: jsonb("resource_attrs"),
+    context: jsonb("context"),
+    runId: text("run_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("policy_decisions_site_idx").on(t.siteId, t.createdAt)]
+);
+
+// ── reports ──────────────────────────────────────────────────────────────
 
 export const reports = pgTable(
   "reports",
@@ -386,6 +420,7 @@ export const allTables = {
   opportunities,
   digests,
   approvals,
+  policyDecisions,
   reports,
   runs,
 };

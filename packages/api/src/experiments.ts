@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { Db } from "@growthx/db";
 import { newId } from "@growthx/shared/runtime";
 import { validateMutations } from "@growthx/shared";
+import { gate, describeTargets, refusal, type Mutation, type OutlineElement } from "./gate.js";
 
 /**
  * Proposing an experiment.
@@ -24,6 +25,7 @@ export async function proposeExperiment(
     citedLearnings: string[];
     variants: { label: string; rationale: string; mutations: unknown }[];
     opportunityId?: string;
+    runId?: string;
   }
 ) {
   const snap = (await db.execute<Record<string, unknown>>(sql`
@@ -81,6 +83,44 @@ export async function proposeExperiment(
     return { stored: false, errors: errors.length ? errors : ["no valid variants"] };
   }
 
+  // The policy gate. It runs after validation — a proposal must be well-formed
+  // before it is worth asking whether it is permitted — and before any write,
+  // so a refused proposal leaves no experiment behind.
+  //
+  // What Cedar is told comes from the page's own outline: which named regions
+  // these selectors sit in, and whether any of them is marked data-gx-deny.
+  // Deriving that here rather than in the policy is deliberate; the policy
+  // should read as a rule, not as a selector parser.
+  const targets = describeTargets(
+    checked.flatMap((v) => v.mutations as Mutation[]),
+    elements as unknown as OutlineElement[]
+  );
+  const decision = await gate(db, siteId, {
+    action: "create_experiment",
+    resource: {
+      type: "Experiment",
+      id: "proposed",
+      attrs: {
+        regions: targets.regions,
+        touchesProtected: targets.touchesProtected,
+        path,
+      },
+    },
+    context: { citedLearnings: input.citedLearnings.join(",") },
+  }, { runId: input.runId ?? null });
+
+  if (decision.decision === "deny") {
+    return {
+      ...refusal(decision),
+      // Naming the offending selectors turns a refusal into something the agent
+      // can act on: it retries targeting something it is allowed to touch.
+      deniedSelectors: targets.protectedSelectors.length
+        ? targets.protectedSelectors
+        : targets.selectors,
+      regions: targets.regions,
+    };
+  }
+
   const experimentId = newId("exp");
   const controlId = `${experimentId}_control`;
   const split: Record<string, number> = { [controlId]: 50 };
@@ -131,4 +171,88 @@ export async function listExperiments(db: Db, siteId: string) {
     out.push({ ...e, variants });
   }
   return out;
+}
+
+/**
+ * Putting an experiment in front of real visitors.
+ *
+ * This is the one action in the system that changes what a stranger sees, so
+ * it is the one the gate exists for. The approval is not looked up by an `if`
+ * and then acted on — it is passed to Cedar as request context, and
+ * `forbid-launch-without-approval` is what refuses. The difference matters on
+ * the day someone adds a second way to launch: the rule lives in one file, not
+ * in each call site.
+ */
+export async function launchExperiment(
+  db: Db, siteId: string, input: { experimentId: string; runId?: string }
+) {
+  const exp = (await db.execute<Record<string, unknown>>(sql`
+    select id, status, path from experiments
+    where id = ${input.experimentId} and site_id = ${siteId} limit 1`)).rows?.[0];
+  if (!exp) return { launched: false, errors: [`no experiment ${input.experimentId}`] };
+
+  // An approval the agent cannot forge: it is read from the database, written
+  // by the human-facing approval route, never taken from the request body.
+  const approval = (await db.execute<Record<string, unknown>>(sql`
+    select id, decided_by, status from approvals
+    where experiment_id = ${input.experimentId} and action = 'launch_experiment' and status = 'approved'
+    order by decided_at desc limit 1`)).rows?.[0];
+
+  const variants = (await db.execute<Record<string, unknown>>(sql`
+    select mutations from variants where experiment_id = ${input.experimentId}`)).rows ?? [];
+  const snap = (await db.execute<Record<string, unknown>>(sql`
+    select elements from snapshots
+    where site_id = ${siteId} and path = ${String(exp.path)} and is_current = true limit 1`)).rows?.[0];
+
+  const targets = describeTargets(
+    variants.flatMap((v) => (v.mutations as Mutation[]) ?? []),
+    ((snap?.elements ?? []) as OutlineElement[])
+  );
+
+  // Is something already live on this page? Counted here rather than asserted
+  // in the policy, for the same reason as the regions above: the policy states
+  // the rule, the API supplies the facts.
+  const concurrent = (await db.execute<Record<string, unknown>>(sql`
+    select count(*)::int as n from experiments
+    where site_id = ${siteId} and path = ${String(exp.path)}
+      and status = 'running' and id <> ${input.experimentId}`)).rows?.[0];
+
+  const decision = await gate(db, siteId, {
+    action: "launch_experiment",
+    resource: {
+      type: "Experiment",
+      id: input.experimentId,
+      attrs: {
+        regions: targets.regions,
+        touchesProtected: targets.touchesProtected,
+        status: String(exp.status),
+        pathHasRunning: Number(concurrent?.n ?? 0) > 0,
+      },
+    },
+    context: { approvedBy: approval ? String(approval.decided_by ?? "") : "" },
+  }, { runId: input.runId ?? null });
+
+  if (decision.decision === "deny") return { launched: false, ...refusal(decision) };
+
+  await db.execute(sql`
+    update experiments set status = 'running', started_at = now()
+    where id = ${input.experimentId}`);
+
+  return {
+    launched: true,
+    experimentId: input.experimentId,
+    approvedBy: approval ? String(approval.decided_by) : null,
+    policyId: decision.policyId,
+    decisionId: decision.decisionId,
+  };
+}
+
+/** Recent policy decisions, newest first. Denials included — especially. */
+export async function listPolicyDecisions(db: Db, siteId: string, limit = 50) {
+  const res = await db.execute<Record<string, unknown>>(sql`
+    select id, action, resource, decision, policy_id, reasons, explain,
+           resource_attrs, context, run_id, created_at
+    from policy_decisions where site_id = ${siteId}
+    order by created_at desc limit ${limit}`);
+  return res.rows ?? [];
 }

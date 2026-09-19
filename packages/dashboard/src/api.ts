@@ -60,7 +60,27 @@ export interface Learning {
   outcome: string; tags: string[]; confidence: string;
 }
 
+export interface PolicyDecisionRow {
+  id: string;
+  action: string;
+  resource: string;
+  decision: "allow" | "deny";
+  policy_id: string | null;
+  reasons: string[];
+  explain: string;
+  resource_attrs: Record<string, unknown> | null;
+  context: Record<string, unknown> | null;
+  run_id: string | null;
+  created_at: string;
+}
+export interface PolicyDoc {
+  source: string;
+  ids: string[];
+  decisions: PolicyDecisionRow[];
+}
+
 export const api = {
+  policy: () => get<PolicyDoc>("/api/policy"),
   experiments: () => get<{ experiments: Experiment[] }>("/api/experiments"),
   learnings: () => get<{ learnings: Learning[] }>("/api/learnings"),
   opportunities: () => get<{ opportunities: Opportunity[] }>("/api/opportunities"),

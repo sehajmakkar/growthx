@@ -39,6 +39,8 @@ are on screen in the video:
 1. **The learning memory** — a growing log of generalisations that demonstrably
    feeds the next hypothesis.
 2. **The policy gate** — the agent is not permitted to act freely on a live site.
+   Eight Cedar policies, evaluated **in the API** before any write. Not in the
+   agent's process, where anything holding the API URL could walk around them.
 3. **The evidence trail** — every opportunity shows the data it reasoned from,
    verified, not asserted.
 
@@ -198,7 +200,8 @@ re-recording at the end is not possible.
 | 4 | 0:48–1:08 | **Opportunities** → click *Show evidence* | Let the evidence table sit on screen | "The agent doesn't assert. Every figure it cites is resolved against the database before the opportunity is accepted — cited on the left, actual on the right. During this run, six citations were **rejected** until it quoted correctly." |
 | 5 | 1:08–1:28 | **Learnings**, then **Experiments** | Show the learning, then the hypothesis that used it | "And it remembers. This is what a previous experiment proved. The agent can't propose anything until it's checked what's already settled — and its new hypothesis is that learning applied." |
 | 6 | 1:28–1:50 | **Variant diff** | Both frames side by side, then hover a mutation row | "Both of these are the live page with the real snippet applying the real changes. Variants are structured DOM operations from a closed set — never generated HTML. Every one is reviewable, with the agent's own reason beside it." |
-| 7 | 1:50–2:15 | **Approvals** | Show the Cedar denial, approve it, then reload Site A in a fresh window | "It is **not allowed** to launch. Cedar policy blocks it until a human approves. Then it's live on the site in under thirty seconds." |
+| 7 | 1:50–2:15 | **Policy** | Click the top refusal, let the matching rule highlight in `growthx.cedar` on the right | "The agent is **not allowed** to launch on its own. That refusal names the policy that caused it, and here is that policy — this file is the authority, not a description of one." |
+| 7b | 2:15–2:25 | **Policy**, scroll to the pricing refusal | Point at `forbid-pricing-and-checkout` | "It also tried to cut the price. Permanently forbidden — approved or not. An agent that can edit its own prices can buy itself a win, and then you're measuring the discount, not the design." |
 | 8 | 2:15–2:35 | **Experiments / results** | Show per-arm rates and the uncertainty line | "It reads the result honestly. Not yet decisive — and it says so, instead of claiming a win." |
 | 9 | 2:35–2:50 | **Learnings** (new record) | Show the new learning and the next proposal | "Then it writes down what it learned, and proposes what to test next. That's the loop." |
 | 10 | 2:50–3:00 | **Architecture slide** | Hold still | "Strands and Cedar — both AWS open source — on Lambda, API Gateway, S3 and CloudFront. Deployed on AWS." |
@@ -272,6 +275,20 @@ Three things worth saying out loud, because they are all real:
   and cannot launch anything.
 
 ---
+
+**"Is the policy gate real, or is it an `if` statement with a nice name?"**
+
+Open `policies/growthx.cedar` — eight policies, evaluated by Cedar (the engine
+behind AWS Verified Permissions) inside the API. Two things to demonstrate if
+pushed: `pnpm check:policy` sends a forged `approvedBy` in the request body and
+it still refuses, because the approval is read from the database, not the
+caller. And a launch that **is** approved by a human is still refused if it
+touches pricing, because in Cedar a `forbid` beats every `permit`.
+
+The honest framing: the value is not that Cedar is shorter than `if`. It is
+that the rules sit in a file a non-engineer can audit, the engine is
+default-deny, and every refusal names the rule that caused it — which is what
+the Policy screen renders.
 
 ## 6. If something breaks mid-recording
 

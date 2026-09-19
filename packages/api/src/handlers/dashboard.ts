@@ -4,7 +4,8 @@ import { segmentKey } from "@growthx/shared/runtime";
 import { getHeatmap, funnel, computeAll, heatmapPoints, pageSummary } from "../aggregate.js";
 import { getSessionDigest } from "../digests.js";
 import { createOpportunity, listOpportunities } from "../opportunities.js";
-import { proposeExperiment, listExperiments } from "../experiments.js";
+import { proposeExperiment, listExperiments, launchExperiment, listPolicyDecisions } from "../experiments.js";
+import { policyDocument } from "../policy.js";
 import { requireSecret } from "../secrets.js";
 import { json, badRequest, serverError } from "../http.js";
 
@@ -77,10 +78,25 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     if (route.endsWith("/opportunities")) {
       return json(200, { opportunities: await listOpportunities(db, siteId) });
     }
+    // The policy file itself, plus every decision it has made. Denials are the
+    // point: an action that was refused writes nothing else anywhere.
+    if (route.endsWith("/policy")) {
+      return json(200, {
+        ...policyDocument(),
+        decisions: await listPolicyDecisions(db, siteId),
+      });
+    }
+    if (route.endsWith("/experiments/launch") && method === "POST") {
+      const body = JSON.parse(event.body ?? "{}");
+      const result = await launchExperiment(db, siteId, body);
+      // 403, not 400: the request was valid and was refused. The status code
+      // should say "you are not allowed to", not "you typed it wrong".
+      return json(result.launched ? 200 : ("denied" in result ? 403 : 422), result);
+    }
     if (route.endsWith("/experiments") && method === "POST") {
       const body = JSON.parse(event.body ?? "{}");
       const result = await proposeExperiment(db, siteId, path, body);
-      return json(result.stored ? 200 : 422, result);
+      return json(result.stored ? 200 : ("denied" in result ? 403 : 422), result);
     }
     if (route.endsWith("/experiments")) {
       return json(200, { experiments: await listExperiments(db, siteId) });

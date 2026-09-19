@@ -1885,6 +1885,72 @@ pnpm check:flicker      # must end with: Anti-flicker contract holds.
 
 ---
 
+### P17 — Cedar policy gate  [status: ✅ passed Sat 19 Sept]
+
+**What it adds.** `policies/growthx.cedar` — eight rules saying what the agent
+may and may not do — evaluated by Cedar on every state-changing request, plus a
+**Policy** screen showing the rules and every decision they have produced.
+
+**Read the policy file first.** It should read as policy, not as code:
+
+```bash
+cat policies/growthx.cedar
+```
+
+**Verify it.**
+
+```bash
+pnpm check:policy
+```
+
+Ends with `The gate refuses, names its reason, and records it.`
+
+**What it proves, and why each one is there.**
+
+| Check | Why it matters |
+|---|---|
+| Rewriting `.tier-price` to `$9` is refused **403** | This exact request **succeeded** before P17. The code denylist never fired, because it matched on selector text and `div.tier.tier-1 > p.tier-price` contains none of the banned words. |
+| The refusal names `forbid-pricing-and-checkout` | A denial you cannot trace to a rule is indistinguishable from a bug |
+| Launch is refused without an approval row | The one action that changes what a stranger sees |
+| A forged `approvedBy` in the request body changes nothing | The approval is read from the `approvals` table, never from the caller |
+| Every decision is recorded, refusals included | A refused action writes nothing else anywhere — without this the gate's most important moments would leave no trace |
+
+**The two demo moments.** On the **Policy** screen, click a refusal and the rule
+that caused it highlights in the source beside it. The stronger one: an
+experiment that a human **has** approved is still refused if it touches pricing,
+because in Cedar a `forbid` beats every `permit`. Approval does not unlock
+everything — only the things that were merely gated.
+
+**Where the gate runs, and why there.** In the API, not in the agent. A gate
+inside the agent's own process is a suggestion: the agent, or anything else
+holding the API URL, calls the endpoint directly. Putting it in the API means
+there is no path to a write that skips it — which is why `check:policy` makes
+every request over HTTPS to the real Lambda rather than calling the function.
+
+**Two things this phase found and fixed.**
+
+1. *The pricing denylist never worked.* `validateMutations` accepted a
+   `deniedPaths` option and no caller ever passed one, and the snapshot did not
+   record which elements were marked `data-gx-deny`. The page now declares its
+   own protected regions, the snapshot records them, and the policy decides.
+2. *Two experiments could run on one page.* The snippet applies the first
+   experiment it finds for a path, so a second would sit in the dashboard marked
+   "running", collect no exposures and prove nothing. Now
+   `forbid-concurrent-experiment-on-path`.
+
+| You see | What it means | Fix |
+|---|---|---|
+| `Internal Server Error` on `/api/policy` | the Lambda could not load Cedar or the policy file | `aws logs tail GrowthxStack-DashboardFnLogs… --since 5m` |
+| `growthx.cedar not found` | the CDK `afterBundling` copy did not run | redeploy; the file must land beside the handler |
+| Everything is refused, including reads | the policy file failed to parse, so the policy set is empty — and an empty set is default-deny | check `/api/policy` returns 8 ids |
+| A pricing mutation is **accepted** | the snapshot predates P17 and has no `protected` flags | `pnpm capture:snapshot` |
+
+> Re-running `capture:snapshot` is required after this phase. `protected` and
+> `region` are now part of the snapshot's content hash, so the first run after
+> upgrading stores a new version even though no visible text changed.
+
+---
+
 ---
 
 ## §D — Demo-day runbook

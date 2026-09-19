@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cedar-policy/cedar-wasm": "4.13.0",
     "@growthx/db": "workspace:*",
     "@growthx/shared": "workspace:*",
     "drizzle-orm": "^0.38.4"

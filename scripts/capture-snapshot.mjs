@@ -125,6 +125,7 @@ try {
       path: el.path, tag: el.tag, classes: el.classes, textSample: el.textSample,
       rect: el.rect, fontSizePx: el.fontSizePx, fontWeight: el.fontWeight,
       isInteractive: el.isInteractive,
+      protected: !!el.protected, region: el.region ?? null,
       aboveFoldAt390: at390 ?? false,
       aboveFoldAt1440: el.aboveFold,
       childCount: el.childCount,
@@ -141,6 +142,7 @@ try {
       path: el.path, tag: el.tag, classes: el.classes, textSample: el.textSample,
       rect: el.rect, fontSizePx: el.fontSizePx, fontWeight: el.fontWeight,
       isInteractive: el.isInteractive,
+      protected: !!el.protected, region: el.region ?? null,
       aboveFoldAt390: el.aboveFold,
       aboveFoldAt1440: at1440 ?? false,
       childCount: el.childCount,
@@ -150,8 +152,13 @@ try {
 
   // Hash the structure, not the capture: re-running on an unchanged page must
   // not produce a new "version" for the agent to reason about.
+  //
+  // `protected` and `region` are part of the structure for this purpose. They
+  // are what the policy gate reads to decide whether a variant may touch an
+  // element, so a page that newly marks something data-gx-deny is a materially
+  // different page even when every word on it is identical.
   const contentHash = createHash("sha256")
-    .update(merged.map((e) => `${e.path}|${e.tag}|${e.textSample}`).join("\n"))
+    .update(merged.map((e) => `${e.path}|${e.tag}|${e.textSample}|${e.protected ? "P" : ""}|${e.region ?? ""}`).join("\n"))
     .digest("hex")
     .slice(0, 16);
 
