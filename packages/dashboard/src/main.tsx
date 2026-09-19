@@ -13,6 +13,7 @@ import { Diff } from "./routes/Diff.js";
 import { Policy } from "./routes/Policy.js";
 import { Approvals } from "./routes/Approvals.js";
 import { Results } from "./routes/Results.js";
+import { Reports } from "./routes/Reports.js";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -30,11 +31,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="approvals" element={<Approvals />} />
           <Route path="policy" element={<Policy />} />
           <Route path="learnings" element={<Learnings />} />
-          <Route path="reports" element={
-            <Placeholder title="Reports"
-              subtitle="What was observed, the diagnosed cause in plain language, and the evidence."
-              body="A report you could act on without ever launching our test: what the agent saw, why it thinks the page underperforms, the figures behind that, and what it proposes to do."
-              phase="P20" />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="runs" element={<Runs />} />
           <Route path="*" element={
             <Placeholder title="Not found" subtitle="" body="That page does not exist." />} />

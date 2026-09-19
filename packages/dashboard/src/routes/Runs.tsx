@@ -10,6 +10,17 @@ import { PageHeader, Empty, Thinking, ErrorNote } from "../components/ui.js";
  * took. An agent that shows its working is auditable; one that only shows its
  * conclusion is a black box with good prose.
  */
+/** Template-stringing a tool argument renders an array of variants as
+ *  "[object Object]", which tells a reader nothing about what the agent
+ *  actually sent. Objects and arrays are summarised by shape instead. */
+function paramText(v: unknown): string {
+  if (v == null) return "—";
+  if (Array.isArray(v)) return `${v.length} item${v.length === 1 ? "" : "s"}`;
+  if (typeof v === "object") return `{${Object.keys(v as object).slice(0, 3).join(",")}}`;
+  const s = String(v);
+  return s.length > 60 ? s.slice(0, 57) + "…" : s;
+}
+
 export function Runs() {
   const { data, error, loading } = useApi(() => api.runs(), []);
 
@@ -67,7 +78,7 @@ export function Runs() {
                       <span className="font-mono text-[0.6875rem] text-muted">
                         {Object.entries(s.params as Record<string, unknown>)
                           .filter(([k]) => k !== "site")
-                          .map(([k, v]) => `${k}=${v}`).join(" ")}
+                          .map(([k, v]) => `${k}=${paramText(v)}`).join(" ")}
                       </span>
                     )}
                     <span className="min-w-0 flex-1 truncate text-xs text-ink" title={String(s.summary ?? "")}>

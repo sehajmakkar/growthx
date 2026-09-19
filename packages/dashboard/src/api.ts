@@ -68,12 +68,16 @@ export interface Opportunity {
 
 export interface Experiment {
   id: string; hypothesis: string; status: string; split: Record<string, number>;
+  opportunity_id?: string | null;
   variants: { id: string; label: string; is_control: boolean; rationale: string;
               mutations: unknown[]; validation: unknown }[];
 }
 export interface Learning {
   id: string; generalisation: string; hypothesis: string; segment: string;
   outcome: string; tags: string[]; confidence: string;
+  /** Which experiment proved it — the report joins on this. */
+  experiment_id: string | null;
+  effect: { lift: number; ciLow: number; ciHigh: number; n: number; decision: string } | null;
 }
 
 export interface PolicyDecisionRow {
