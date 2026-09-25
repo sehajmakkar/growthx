@@ -211,6 +211,8 @@ trusting any of them.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — the diagrams
 - [GUIDE.md](GUIDE.md) — setup and per-phase verification
 - [DEMO.md](DEMO.md) — the recording runbook
+- [ROADMAP.md](ROADMAP.md) — what is left, what was cut and why, and what
+  would have to be true before this ran unsupervised
 
 ---
 
